@@ -1,0 +1,15 @@
+MIN_SQUARE = 0
+MAX_SQUARE = 63
+MAX_INT = 2 ** 64 - 1
+
+STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+# DIRECTIONS
+NORTH = 8
+EAST = 1
+SOUTH = -8
+WEST = -1
+NE = 9
+SE = -7
+SW = -9
+NW = 7
