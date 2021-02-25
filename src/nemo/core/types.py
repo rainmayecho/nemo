@@ -11,10 +11,14 @@ class BitBoard(int):
     def __new__(cls, value):
         return super().__new__(cls, value & MAX_INT)
 
-    def pprint(self):
-        b = format(self, "064b")
+    def __repr__(self):
         n = 8
-        print("\n".join([b[i : i + n][::-1] for i in range(0, len(b), n)]))
+        b = format(self, "064b")
+        f = lambda c: " . " if c == "0" else " + "
+        return "\n\n".join([" ".join(map(f, b[i : i + n][::-1])) for i in range(0, len(b), n)])
+
+    def __str__(self):
+        return repr(self)
 
     def __invert__(self):
         return self.__class__(MAX_INT ^ self)
@@ -290,4 +294,4 @@ class State:
             self.half_move_clock,
             self.full_move_clock,
         )
-        return f"{c} {cr} {hmc} {fmc}"
+        return f"{c} {ep} {cr} {hmc} {fmc}"

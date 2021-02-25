@@ -6,6 +6,24 @@ rank_mask = lambda s: (0xFF) << (s & 56)
 file_mask = lambda s: (0x0101010101010101) << (s & 7)
 
 
+NOT_A = ~Files.A
+NOT_AB = ~BitBoard(Files.A | Files.B)
+NOT_H = ~Files.H
+NOT_GH = ~BitBoard(Files.G | Files.H)
+
+# One steps
+n_one = lambda s: (s << NORTH)
+s_one = lambda s: (s >> NORTH)
+
+e_one = lambda s: (s << EAST & NOT_A)
+w_one = lambda s: (s >> EAST & NOT_H)
+
+ne_one = lambda s: (s << 9 & NOT_A)
+nw_one = lambda s: (s << 7 & NOT_H)
+se_one = lambda s: (s >> 7 & NOT_A)
+sw_one = lambda s: (s >> 9 & NOT_H)
+
+
 def diag_mask(s: int) -> int:
     md = 0x8040201008040201
     d = ((s & 7) << 3) - (s & 56)
@@ -22,6 +40,53 @@ def antidiag_mask(s: int) -> int:
     return (md >> s) << n
 
 
+def knight_attacks(s: int) -> int:
+    return knights_attack_mask(1 << s)
+
+
+def knights_attack_mask(knights: int) -> int:
+    s = knights
+    return (
+        ((s << 17) & NOT_A)
+        | ((s << 15) & NOT_H)
+        | ((s << 10) & NOT_AB)
+        | ((s << 6) & NOT_GH)
+        | ((s >> 17) & NOT_H)
+        | ((s >> 15) & NOT_A)
+        | ((s >> 10) & NOT_GH)
+        | ((s >> 6) & NOT_AB)
+    )
+
+
+def white_pawns_all_attack_mask(pawns: int) -> int:
+    return ne_one(pawns) | nw_one(pawns)
+
+
+def white_pawns_single_attack_mask(pawns: int) -> int:
+    return ne_one(pawns) ^ nw_one(pawns)
+
+
+def white_pawns_double_attack_mask(pawns: int) -> int:
+    return ne_one(pawns) & nw_one(pawns)
+
+
+def black_pawns_all_attack_mask(pawns: int) -> int:
+    return se_one(pawns) | sw_one(pawns)
+
+
+def black_pawns_single_attack_mask(pawns: int) -> int:
+    return se_one(pawns) ^ sw_one(pawns)
+
+
+def black_pawns_double_attack_mask(pawns: int) -> int:
+    return se_one(pawns) & sw_one(pawns)
+
+
+def king_attacks(s: int):
+    s = 1 << s
+    return n_one(s) | ne_one(s) | e_one(s) | se_one(s) | s_one(s) | sw_one(s) | w_one(s) | nw_one(s)
+
+
 rank_mask_ex = lambda s: (1 << s) ^ rank_mask(s)
 file_mask_ex = lambda s: (1 << s) ^ file_mask(s)
 diag_mask_ex = lambda s: (1 << s) ^ diag_mask(s)
@@ -31,3 +96,5 @@ antidiag_mask_ex = lambda s: (1 << s) ^ antidiag_mask(s)
 ROOK_ATTACKS = [BitBoard(rank_mask_ex(s) | file_mask_ex(s)) for s in range(64)]
 BISHOP_ATTACKS = [BitBoard(diag_mask_ex(s) | antidiag_mask_ex(s)) for s in range(64)]
 QUEEN_ATTACKS = [BitBoard(BISHOP_ATTACKS[s] | ROOK_ATTACKS[s]) for s in range(64)]
+KNIGHT_ATTACKS = [BitBoard(knight_attacks(s)) for s in range(64)]
+KING_ATTACKS = [BitBoard(king_attacks(s)) for s in range(64)]

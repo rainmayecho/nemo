@@ -43,6 +43,10 @@ class Position:
             fmc,
         )
 
+    @property
+    def legal_moves(self):
+        return []
+
     def make_move(self, move: Move) -> None:
         return
 

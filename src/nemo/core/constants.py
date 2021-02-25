@@ -13,3 +13,12 @@ NE = 9
 SE = -7
 SW = -9
 NW = 7
+
+NWW = NW + WEST
+NNW = NORTH + NW
+NNE = NORTH + NE
+NEE = NE + EAST
+SEE = SE + EAST
+SSE = SOUTH + SE
+SSW = SOUTH + SW
+SWW = SW + WEST
