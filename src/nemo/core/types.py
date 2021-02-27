@@ -1,31 +1,50 @@
-from abc import ABC, abstractproperty
+from abc import ABC, abstractmethod
 from enum import IntEnum
 from functools import reduce
+from itertools import chain
 from operator import ior
 from typing import Union
 
 from .constants import MIN_SQUARE, MAX_SQUARE, MAX_INT, STARTING_FEN
 
 
-class BitBoard(int):
+class Bitboard(int):
     def __new__(cls, value):
         return super().__new__(cls, value & MAX_INT)
+
+    def __invert__(self):
+        return self.__class__(MAX_INT ^ self)
+
+    def __and__(self, other):
+        return self.__class__(int(self) & int(other))
+
+    def __rand__(self, other):
+        return self.__class__(int(self) & int(other))
+
+    def __xor__(self, other):
+        return self.__class__(int(self) ^ int(other))
+
+    def __rxor__(self, other):
+        return self.__class__(int(self) ^ int(other))
+
+    def __or__(self, other):
+        return self.__class__(int(self) | int(other))
+
+    def __ror__(self, other):
+        return self.__class__(int(self) | int(other))
 
     def __repr__(self):
         n = 8
         b = format(self, "064b")
-        f = lambda c: " . " if c == "0" else " + "
+        f = lambda c: " . " if c == "0" else " * "
         return "\n\n".join([" ".join(map(f, b[i : i + n][::-1])) for i in range(0, len(b), n)])
 
     def __str__(self):
         return repr(self)
 
-    def __invert__(self):
-        return self.__class__(MAX_INT ^ self)
 
-
-EMPTY = BitBoard(0)
-UNIVERSE = BitBoard(MAX_INT)
+EMPTY = Bitboard(0)
+UNIVERSE = Bitboard(MAX_INT)
 DIRECTIONS = [8, 1, -8, -1, 7, 9, -7, -9]
 
 
@@ -33,6 +52,10 @@ class Square(int):
     def __new__(cls, value):
         assert value >= MIN_SQUARE and value <= MAX_SQUARE
         return super().__new__(cls, value)
+
+    @property
+    def bitboard(self) -> Bitboard:
+        return Bitboard(1 << self)
 
 
 class AutoIncrementingEnum(IntEnum):
@@ -43,8 +66,8 @@ class AutoIncrementingEnum(IntEnum):
         return obj
 
     @property
-    def bitboard(self) -> BitBoard:
-        return BitBoard(1 << self._value_)
+    def bitboard(self) -> Bitboard:
+        return Bitboard(1 << self._value_)
 
 
 class PieceType(IntEnum):
@@ -63,6 +86,9 @@ class PieceType(IntEnum):
 class Color(IntEnum):
     WHITE = 0
     BLACK = 1
+
+    def __invert__(self):
+        return Color.WHITE if self else Color.BLACK
 
 
 class Squares(AutoIncrementingEnum):
@@ -144,7 +170,7 @@ class Squares(AutoIncrementingEnum):
 class Ranks:
     """Ranks from white perspective"""
 
-    RANK_1 = BitBoard(
+    RANK_1 = Bitboard(
         Squares.A1.bitboard
         | Squares.B1.bitboard
         | Squares.C1.bitboard
@@ -154,24 +180,24 @@ class Ranks:
         | Squares.G1.bitboard
         | Squares.H1.bitboard
     )
-    RANK_2 = BitBoard(RANK_1 << 8)
-    RANK_3 = BitBoard(RANK_2 << 8)
-    RANK_4 = BitBoard(RANK_3 << 8)
-    RANK_5 = BitBoard(RANK_4 << 8)
-    RANK_6 = BitBoard(RANK_5 << 8)
-    RANK_7 = BitBoard(RANK_6 << 8)
-    RANK_8 = BitBoard(RANK_7 << 8)
+    RANK_2 = Bitboard(RANK_1 << 8)
+    RANK_3 = Bitboard(RANK_2 << 8)
+    RANK_4 = Bitboard(RANK_3 << 8)
+    RANK_5 = Bitboard(RANK_4 << 8)
+    RANK_6 = Bitboard(RANK_5 << 8)
+    RANK_7 = Bitboard(RANK_6 << 8)
+    RANK_8 = Bitboard(RANK_7 << 8)
 
 
 class Files:
-    A = BitBoard(reduce(ior, (getattr(Squares, f"A{i}").bitboard for i in range(1, 9))))
-    B = BitBoard(reduce(ior, (getattr(Squares, f"B{i}").bitboard for i in range(1, 9))))
-    C = BitBoard(reduce(ior, (getattr(Squares, f"C{i}").bitboard for i in range(1, 9))))
-    D = BitBoard(reduce(ior, (getattr(Squares, f"D{i}").bitboard for i in range(1, 9))))
-    E = BitBoard(reduce(ior, (getattr(Squares, f"E{i}").bitboard for i in range(1, 9))))
-    F = BitBoard(reduce(ior, (getattr(Squares, f"F{i}").bitboard for i in range(1, 9))))
-    G = BitBoard(reduce(ior, (getattr(Squares, f"G{i}").bitboard for i in range(1, 9))))
-    H = BitBoard(reduce(ior, (getattr(Squares, f"H{i}").bitboard for i in range(1, 9))))
+    A = Bitboard(reduce(ior, (getattr(Squares, f"A{i}").bitboard for i in range(1, 9))))
+    B = Bitboard(reduce(ior, (getattr(Squares, f"B{i}").bitboard for i in range(1, 9))))
+    C = Bitboard(reduce(ior, (getattr(Squares, f"C{i}").bitboard for i in range(1, 9))))
+    D = Bitboard(reduce(ior, (getattr(Squares, f"D{i}").bitboard for i in range(1, 9))))
+    E = Bitboard(reduce(ior, (getattr(Squares, f"E{i}").bitboard for i in range(1, 9))))
+    F = Bitboard(reduce(ior, (getattr(Squares, f"F{i}").bitboard for i in range(1, 9))))
+    G = Bitboard(reduce(ior, (getattr(Squares, f"G{i}").bitboard for i in range(1, 9))))
+    H = Bitboard(reduce(ior, (getattr(Squares, f"H{i}").bitboard for i in range(1, 9))))
 
 
 SQUARES = {i: Squares[square] for i, square in enumerate(Squares.__members__)}
@@ -188,8 +214,12 @@ PIECE_TYPE_MAP = {
     "r": PieceType.ROOK,
     "q": PieceType.QUEEN,
     "k": PieceType.KING,
+    "ep": PieceType.ENPASSANT,
 }
+INV_PIECE_TYPE_MAP = {v: k for k, v in PIECE_TYPE_MAP.items()}
 PIECE_SYMBOL_MAP = {
+    (PieceType.ENPASSANT, Color.WHITE): "^",
+    (PieceType.ENPASSANT, Color.BLACK): "v",
     (PieceType.PAWN, Color.WHITE): "♙",
     (PieceType.PAWN, Color.BLACK): "♟︎",
     (PieceType.KNIGHT, Color.WHITE): "♘",
@@ -204,14 +234,102 @@ PIECE_SYMBOL_MAP = {
     (PieceType.KING, Color.BLACK): "♚",
 }
 
+PIECE_REGISTRY = {}
 
-class Piece:
-    def __init__(self, _type: PieceType, color: Color):
-        self._type = _type
+class Piece(ABC):
+    _type: PieceType = None
+
+    def __init__(self, color: Color):
         self.color = color
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        PIECE_REGISTRY[INV_PIECE_TYPE_MAP[cls._type]] = cls
+
+    @abstractmethod
+    def captures(self, *args, **kwargs):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def quiet_moves(self, *args, **kwargs):
+        raise NotImplementedError()
 
     def __str__(self):
         return PIECE_SYMBOL_MAP[(self._type, 1 - self.color)]
+
+
+class StackedBitboard:
+    def __init__(self, bitboards_by_color_and_type, square_occupancy):
+        self.__boards = bitboards_by_color_and_type
+        self.__square_occupancy = square_occupancy
+
+    @property
+    def white_occupancy(self):
+        occ = Bitboard(EMPTY)
+        for bb in self.__boards[Color.WHITE].values():
+            occ |= bb
+        return occ
+
+    @property
+    def black_occupancy(self):
+        occ = Bitboard(EMPTY)
+        for bb in self.__boards[Color.BLACK].values():
+            occ |= bb
+        return occ
+
+    @property
+    def occupancy(self):
+        return self.white_occupancy | self.black_occupancy
+
+    @property
+    def squares(self):
+        return self.__square_occupancy
+
+    @property
+    def boards(self):
+        return self.__boards
+
+    def piece_at(s: int) -> "Piece":
+        return self.squares[s]
+
+    def board_for(self, p: "Piece") -> Bitboard:
+        return self.__boards[p.color][p._type]
+
+    def place_piece(s: "Square", p: "Piece") -> None:
+        if not isinstance(s, Square):
+            s = Square(s)
+
+        existing_piece_at_s = self.piece_at(s)
+        placing_piece_bb = self.board_for(p)
+        if existing_piece_at_s is not None:
+            existing_piece_bb = self.board_for(existing_piece_at_s)
+            placing_piece_bb = self.board_for(p)
+            existing_piece_bb ^= s.bitboard  # Unset the bit for the existing piece
+        placing_piece_bb ^= s.bitboard  # Set the bit for the new piece
+        self.square[s] = p
+
+    def remove_piece(s: "Square") -> None:
+        if not isinstance(s, Square):
+            s = Square(s)
+        existing_piece_at_s = self.piece_at(s)
+        if existing_piece_at_s is not None:
+            existing_piece_bb = self.get_board_for(existing_piece_at_s)
+            existing_piece_bb ^= s.bitboard  # Unset the bit for the existing piece
+        self.square[s] = None
+
+    def __getitem__(self, key):
+        if isinstance(key, Color):
+            return getattr(self, f"{key.name.lower()}_occupancy")
+        elif isinstance(key, Piece):
+            return self.board_for(key)
+        elif isinstance(key, (Square, int)):
+            return self.squares[key]
+        else:
+            raise TypeError("unsupported type for lookup")
+
+    def __hash__(self):
+        return hash(tuple(self.squares))
+
 
 
 class CastlingRights(int):
@@ -268,9 +386,8 @@ class State:
         full_move_clock: int = 0,
         prev: "State" = None,
     ):
-        self.__initial_fen = fen
         self.castling_rights = castling_rights or CastlingRights()
-        self.ep_square = Squares[ep_square.upper()] if ep_square is not None else "-"
+        self.ep_square = Squares[ep_square.upper()] if ep_square not in ("-", None) else None
         self.half_move_clock = half_move_clock
         self.full_move_clock = full_move_clock
         self.turn = Color.WHITE
@@ -294,4 +411,4 @@ class State:
             self.half_move_clock,
             self.full_move_clock,
         )
-        return f"{c} {ep} {cr} {hmc} {fmc}"
+        return f"{c} {ep or '-'} {cr} {hmc} {fmc}"

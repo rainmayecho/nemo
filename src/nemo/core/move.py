@@ -26,21 +26,27 @@ class Move:
             _from = Squares[uci[0:2].upper()]
             _to = Squares[uci[2:4].upper()]
         else:
-            _from = SQUARES[_from]
-            _to = SQUARES[_to]
+            _from = SQUARES[_from]._value_
+            _to = SQUARES[_to]._value_
         self._move = (flags << 12) | ((_from & 63) << 6) | (_to & 63)
 
     @property
     def is_quiet(self):
-        return self._move == MoveFlags.QUIET
+        return self.flags == MoveFlags.QUIET
 
     @property
     def is_capture(self):
-        return self._move & MoveFlags.CAPTURE
+        return self.flags & MoveFlags.CAPTURE
 
     @property
     def is_promotion(self):
-        return self._move & MoveFlags.PROMOTION
+        return self.flags & MoveFlags.PROMOTION
+
+    @property
+    def promotion_piece_str(self):
+        if not self.is_promotion:
+            return ""
+        return ("n", "b", "r", "q")[(self.flags & 11) - 8]
 
     @property
     def _to(self):
@@ -65,4 +71,20 @@ class Move:
         return f"<Move {SQUARES[self._from].name.lower()} to {SQUARES[self._to].name.lower()}>"
 
     def __str__(self) -> str:
-        return f"{SQUARES[self._from].name.lower()}{SQUARES[self._to].name.lower()}"
+        return f"{SQUARES[self._from].name.lower()}{SQUARES[self._to].name.lower()}{self.promotion_piece_str}"
+
+
+class MoveList:
+    """Encapsulates ordering a sequence of candidate moves"""
+    def __init__(self, moves):
+        self.__moves = moves
+
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return iter(self)
+
+    def sort(self):
+        pass
