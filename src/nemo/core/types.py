@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
+from collections import deque
 from enum import IntEnum
-from functools import reduce
+from functools import reduce, lru_cache
 from itertools import chain
 from operator import ior
-from typing import Union
+from typing import Union, NamedTuple, Generator
 
 from .constants import MIN_SQUARE, MAX_SQUARE, MAX_INT, STARTING_FEN
 
@@ -215,6 +216,7 @@ PIECE_TYPE_MAP = {
     "q": PieceType.QUEEN,
     "k": PieceType.KING,
     "ep": PieceType.ENPASSANT,
+    "__default__": "Piece"
 }
 INV_PIECE_TYPE_MAP = {v: k for k, v in PIECE_TYPE_MAP.items()}
 PIECE_SYMBOL_MAP = {
@@ -233,10 +235,11 @@ PIECE_SYMBOL_MAP = {
     (PieceType.KING, Color.WHITE): "♔",
     (PieceType.KING, Color.BLACK): "♚",
 }
+PROMOTABLE = {PieceType.KNIGHT, PieceType.BISHOP, PieceType.ROOK, PieceType.QUEEN}
 
 PIECE_REGISTRY = {}
 
-class Piece(ABC):
+class AbstractPiece(ABC):
     _type: PieceType = None
 
     def __init__(self, color: Color):
@@ -244,7 +247,8 @@ class Piece(ABC):
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        PIECE_REGISTRY[INV_PIECE_TYPE_MAP[cls._type]] = cls
+        PIECE_REGISTRY[cls._type] = cls
+        PIECE_REGISTRY[INV_PIECE_TYPE_MAP.get(cls._type or "__default__")] = cls
 
     @abstractmethod
     def captures(self, *args, **kwargs):
@@ -254,6 +258,19 @@ class Piece(ABC):
     def quiet_moves(self, *args, **kwargs):
         raise NotImplementedError()
 
+    @abstractmethod
+    def pseudo_legal_moves(self, *args, **kwargs):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def legal_moves(self, *args, **kwargs):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def attack_set(self, *args, **kwargs):
+        raise NotImplementedError()
+
+
     def __str__(self):
         return PIECE_SYMBOL_MAP[(self._type, 1 - self.color)]
 
@@ -262,19 +279,48 @@ class StackedBitboard:
     def __init__(self, bitboards_by_color_and_type, square_occupancy):
         self.__boards = bitboards_by_color_and_type
         self.__square_occupancy = square_occupancy
+        self.__checkers = Bitboard(0)
+
+    @staticmethod
+    @lru_cache(maxsize=None)
+    def test_piece(c: Color, piece_type: PieceType):
+        return PIECE_REGISTRY[piece_type](c)
+
+    def checkers(self, c: Color) -> Bitboard:
+        """Bitboard representing pieces that can check the King of color `c`"""
+        checkers_bb = Bitboard(0)
+        king_bb = self.__boards[c][PieceType.KING]
+        for piece_type, piece_bb in self.__boards[~c]:
+            if piece_type != PieceType.KING:
+                piece = test_piece(c, piece_type)
+                if piece.attack_set & king_bb:
+                    checkers_bb |= self.board_for(piece)
+        return checkers_bb
+
+    def king_in_check(self, c: Color):
+        king_bb = self.__boards[c][PieceType.KING]
+        for piece_type, piece_bb in self.__boards[~c].items():
+            if piece_type not in (PieceType.KING, PieceType.ENPASSANT):
+                piece = self.test_piece(~c, piece_type)
+                # print(piece.attack_set(self) & king_bb)
+                if piece.attack_set(self) & king_bb:
+                    return True
+        return False
 
     @property
     def white_occupancy(self):
         occ = Bitboard(EMPTY)
-        for bb in self.__boards[Color.WHITE].values():
-            occ |= bb
+        for piece_type, bb in self.__boards[Color.WHITE].items():
+            if piece_type != PieceType.ENPASSANT:
+                occ |= bb
         return occ
 
     @property
     def black_occupancy(self):
         occ = Bitboard(EMPTY)
-        for bb in self.__boards[Color.BLACK].values():
-            occ |= bb
+        for piece_type, bb in self.__boards[Color.BLACK].items():
+            if piece_type != PieceType.ENPASSANT:
+                occ |= bb
         return occ
 
     @property
@@ -289,38 +335,48 @@ class StackedBitboard:
     def boards(self):
         return self.__boards
 
-    def piece_at(s: int) -> "Piece":
+    def piece_at(self, s: int) -> "Piece":
         return self.squares[s]
 
     def board_for(self, p: "Piece") -> Bitboard:
         return self.__boards[p.color][p._type]
 
-    def place_piece(s: "Square", p: "Piece") -> None:
+    def place_piece(self, s: "Square", p: "Piece") -> None:
         if not isinstance(s, Square):
             s = Square(s)
 
         existing_piece_at_s = self.piece_at(s)
         placing_piece_bb = self.board_for(p)
+        c = p.color
         if existing_piece_at_s is not None:
-            existing_piece_bb = self.board_for(existing_piece_at_s)
-            placing_piece_bb = self.board_for(p)
-            existing_piece_bb ^= s.bitboard  # Unset the bit for the existing piece
-        placing_piece_bb ^= s.bitboard  # Set the bit for the new piece
-        self.square[s] = p
+            self.__boards[~c][existing_piece_at_s._type] ^= s.bitboard
+        self.__boards[c][p._type] ^= s.bitboard  # Set the bit for the new piece
+        self.squares[s] = p
+        return existing_piece_at_s
 
-    def remove_piece(s: "Square") -> None:
+    def remove_piece(self, s: "Square") -> None:
         if not isinstance(s, Square):
             s = Square(s)
         existing_piece_at_s = self.piece_at(s)
         if existing_piece_at_s is not None:
-            existing_piece_bb = self.get_board_for(existing_piece_at_s)
-            existing_piece_bb ^= s.bitboard  # Unset the bit for the existing piece
-        self.square[s] = None
+            self.__boards[existing_piece_at_s.color][existing_piece_at_s._type] ^= s.bitboard
+        self.squares[s] = None
+        return existing_piece_at_s
+
+    def set_enpassant_board(self, c: Color, s: Square) -> None:
+        self.__boards[c][PieceType.ENPASSANT] = s.bitboard
+
+    def ep_board(self, c: Color) -> Bitboard:
+        return self.__boards[c][PieceType.ENPASSANT]
+
+    def iterpieces(self, c: Color) -> Generator[AbstractPiece, None, None]:
+        for piece_type in self.__boards[c]:
+            yield self.test_piece(c, piece_type)
 
     def __getitem__(self, key):
         if isinstance(key, Color):
             return getattr(self, f"{key.name.lower()}_occupancy")
-        elif isinstance(key, Piece):
+        elif isinstance(key, AbstractPiece):
             return self.board_for(key)
         elif isinstance(key, (Square, int)):
             return self.squares[key]
@@ -332,75 +388,115 @@ class StackedBitboard:
 
 
 
+class CastlingRightsEnum(AutoIncrementingEnum):
+    none = "-"
+    K = "K"
+    Q = "Q"
+    KQ = "KQ"
+    k = "k"
+    Kk = "Kk"
+    Qk = "Qk"
+    KQk = "KQk"
+    q = "q"
+    Kq = "Kq"
+    Qq = "Qq"
+    KQq = "KQq"
+    kq = "kq"
+    Kkq = "Kkq"
+    Qkq = "Qkq"
+    KQkq = "KQkq"
+
+
 class CastlingRights(int):
-    MAPPING = {
-        0: "-",
-        1: "k",
-        2: "q",
-        3: "kq",
-    }
+    """
+    Representation of Castling Rights as a 4-bit number
 
-    def __init__(self, w: int = 3, b: int = 3):
-        self.white = 3
-        self.black = 3
+    where 1 = castling is permitted.
 
-    def __and__(self, rook_square: Square):
-        if rook_square == Squares.A1:
-            return bool(self.white & 2)
-        elif rook_square == Squares.H1:
-            return bool(self.white & 1)
-        elif rook_square == Squares.H8:
-            return bool(self.black & 1)
-        elif rook_square == Squares.A8:
-            return bool(self.black & 2)
+    0 0 0 0
+    │ │ │ |_ w kingside
+    │ │ │___ w queenside
+    │ │_____ b kingside
+    │_______ b queenside
 
-    def king_moved(self, color: Color):
-        setattr(self, color.name.lower(), 0)
+    """
+    def __new__(cls, value):
+        assert value >= 0 and value <= 15
+        return super().__new__(cls, value)
 
-    def rook_moved(self, from_square: Square):
-        if from_square == Squares.A1:
-            self.white ^= 2
-        elif from_square == Squares.H1:
-            self.white ^= 1
-        elif from_square == Squares.A8:
-            self.black ^= 2
-        elif from_square == Squares.H8:
-            self.black ^= 1
+    def __and__(self, other):
+        return self.__class__(int(self) & int(other))
 
-    def copy(self) -> "CastlingRights":
-        return type(self)(self.white, self.black)
+    def __rand__(self, other):
+        return self.__class__(int(self) & int(other))
+
+    def __xor__(self, other):
+        return self.__class__(int(self) ^ int(other))
+
+    def __rxor__(self, other):
+        return self.__class__(int(self) ^ int(other))
+
+    def __or__(self, other):
+        return self.__class__(int(self) | int(other))
+
+    def __ror__(self, other):
+        return self.__class__(int(self) | int(other))
+
+    def __repr__(self) -> str:
+        cr = CastlingRightsEnum(self)
+        return f"<CastlingRights {cr.name}={cr._value_}>"
 
     def __str__(self) -> str:
-        wcr = self.MAPPING[self.white].upper()
-        bcr = self.MAPPING[self.black].upper()
-        return "-" if wcr == bcr else wcr + bcr
+        return CastlingRightsEnum(self).name
 
+
+SubState = NamedTuple("Substate", [
+    ("castling", CastlingRights),
+    ("captured", AbstractPiece),
+    ("ep", Square),
+])
 
 class State:
     def __init__(
         self,
         turn: Color = Color.WHITE,
-        castling_rights: CastlingRights = None,
+        castling_rights: str = "KQkq",
         ep_square: str = None,
         half_move_clock: int = 0,
         full_move_clock: int = 0,
-        prev: "State" = None,
     ):
-        self.castling_rights = castling_rights or CastlingRights()
-        self.ep_square = Squares[ep_square.upper()] if ep_square not in ("-", None) else None
-        self.half_move_clock = half_move_clock
-        self.full_move_clock = full_move_clock
-        self.turn = Color.WHITE
-        self.prev = prev
+        ep_square = Square(Squares[ep_square.upper()]._value_) if ep_square not in ("-", None) else None
+        castling_rights = castling_rights if castling_rights != "-" else "none"
+        castling_rights = CastlingRights(CastlingRightsEnum[castling_rights]._value_)
 
-    def __next__(self):
-        return type(self)(
-            COLORS[self.turn ^ 1],
-            self.castling_rights.copy(),
-            0,
-            self.full_move_clock + 1,
-            self,
+        self.half_move_clock = int(half_move_clock)
+        self.full_move_clock = int(full_move_clock)
+        self.turn = Color.WHITE if turn in ("w", 0) else Color.BLACK
+        self.__stack = deque([SubState(castling=castling_rights, captured=None, ep=ep_square)])
+
+
+    def push(self, captured=None, castling=None, ep_square=None):
+        self.full_move_clock += 1
+        self.turn = ~self.turn
+        cur = self.__stack[0]
+        _s = SubState(
+            castling=cur.castling ^ (castling << self.turn),
+            captured=captured,
+            ep=ep_square,
         )
+        self.__stack.appendleft(_s)
+
+    def pop(self):
+        self.full_move_clock -= 1
+        self.turn = ~self.turn
+        captured, ep_square = None, None
+        if self.__stack:
+            return self.__stack.popleft()
+        return (CastlingRights(15), None, None)
+
+    @property
+    def castling_rights(self):
+        return self.__stack[0].castling
 
     @property
     def fen_suffix(self) -> str:

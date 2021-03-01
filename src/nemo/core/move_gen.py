@@ -1,4 +1,6 @@
 from collections import defaultdict
+from functools import lru_cache
+
 from .constants import MAX_SQUARE, MIN_SQUARE, MAX_INT, NORTH, EAST, SOUTH, WEST, NE, SE, SW, NW
 from .types import (
     DIRECTIONS,
@@ -12,10 +14,8 @@ from .types import (
     Files,
     Ranks,
 )
-
-rank_mask = lambda s: (0xFF) << (s & 56)
-file_mask = lambda s: (0x0101010101010101) << (s & 7)
-
+from .utils import rank_mask, file_mask, diag_mask, antidiag_mask
+from typing import Tuple
 
 NOT_A = ~Files.A
 NOT_AB = ~Bitboard(Files.A | Files.B)
@@ -36,35 +36,50 @@ nw_one = lambda s: (s << 7 & NOT_H)
 se_one = lambda s: (s >> 7 & NOT_A)
 sw_one = lambda s: (s >> 9 & NOT_H)
 
-
-def relative_second_rank_bb(color: Color):
+@lru_cache(maxsize=None)
+def relative_second_rank_bb(color: Color) -> Bitboard:
     return Ranks.RANK_2 if color == Color.WHITE else Ranks.RANK_7
 
+@lru_cache(maxsize=None)
+def relative_third_rank_bb(color: Color) -> Bitboard:
+    return Ranks.RANK_3 if color == Color.WHITE else Ranks.RANK_6
 
-def relative_eigth_rank_bb(color: Color):
+@lru_cache(maxsize=None)
+def relative_fourth_rank_bb(color: Color) -> Bitboard:
+    return Ranks.RANK_4 if color == Color.WHITE else Ranks.RANK_5
+
+@lru_cache(maxsize=None)
+def relative_eigth_rank_bb(color: Color) -> Bitboard:
     return Ranks.RANK_8 if color == Color.WHITE else Ranks.RANK_1
 
+@lru_cache(maxsize=None)
+def relative_south(color: Color, bb: Bitboard) -> Bitboard:
+    return bb >> 8 if color == Color.WHITE else bb << 8
 
-def diag_mask(s: int) -> int:
-    md = 0x8040201008040201
-    d = ((s & 7) << 3) - (s & 56)
-    n = -d & (d >> 31)
-    s = d & (-d >> 31)
-    return (md >> s) << n
+@lru_cache(maxsize=None)
+def square_below(color: Color, s: Square) -> int:
+    if not s:
+        return None
+    return Square(s - 8) if color == Color.WHITE else Square(s + 8)
+
+@lru_cache(maxsize=None)
+def square_above(color: Color, s: Square) -> int:
+    return Square(s + 8) if color == Color.WHITE else Square(s - 8)
+
+@lru_cache(maxsize=None)
+def relative_rook_squares(color: Color, short: bool = True) -> Tuple[Square]:
+    """Return the rook squares from, to by color and castling type"""
+    if color == Color.WHITE:
+        return (Square.H1, Square.F1) if short else (Square.A1, Square.D1)
+    elif color == Color.BLACK:
+        return (Square.H8, Square.F8) if short else (Square.A8, Square.D8)
 
 
-def antidiag_mask(s: int) -> int:
-    md = 0x0102040810204080
-    d = 56 - ((s & 7) << 3) - (s & 56)
-    n = -d & (d >> 31)
-    s = d & (-d >> 31)
-    return (md >> s) << n
-
-
+@lru_cache(maxsize=None)
 def knight_attacks(s: int) -> int:
     return knights_attack_mask(1 << s)
 
-
+@lru_cache(maxsize=None)
 def knights_attack_mask(knights: int) -> int:
     s = knights
     return (
@@ -78,47 +93,47 @@ def knights_attack_mask(knights: int) -> int:
         | ((s >> 6) & NOT_AB)
     )
 
-
+@lru_cache(maxsize=None)
 def white_pawns_all_attack_mask(pawns: int) -> int:
     return ne_one(pawns) | nw_one(pawns)
 
-
+@lru_cache(maxsize=None)
 def white_pawns_single_attack_mask(pawns: int) -> int:
     return ne_one(pawns) ^ nw_one(pawns)
 
-
+@lru_cache(maxsize=None)
 def white_pawns_double_attack_mask(pawns: int) -> int:
     return ne_one(pawns) & nw_one(pawns)
 
-
+@lru_cache(maxsize=None)
 def black_pawns_all_attack_mask(pawns: int) -> int:
     return se_one(pawns) | sw_one(pawns)
 
-
+@lru_cache(maxsize=None)
 def black_pawns_single_attack_mask(pawns: int) -> int:
     return se_one(pawns) ^ sw_one(pawns)
 
-
+@lru_cache(maxsize=None)
 def black_pawns_double_attack_mask(pawns: int) -> int:
     return se_one(pawns) & sw_one(pawns)
 
-
+@lru_cache(maxsize=None)
 def white_pawns_single_push(pawns: int) -> int:
     return n_one(pawns)
 
-
+@lru_cache(maxsize=None)
 def white_pawns_double_push(pawns: int) -> int:
     return n_two(pawns)
 
-
+@lru_cache(maxsize=None)
 def black_pawns_single_push(pawns: int) -> int:
     return s_one(pawns)
 
-
+@lru_cache(maxsize=None)
 def black_pawns_double_push(pawns: int) -> int:
     return s_two(pawns)
 
-
+@lru_cache(maxsize=None)
 def king_attacks(s: int):
     s = 1 << s
     return n_one(s) | ne_one(s) | e_one(s) | se_one(s) | s_one(s) | sw_one(s) | w_one(s) | nw_one(s)
