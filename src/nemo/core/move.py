@@ -1,5 +1,5 @@
 from enum import IntEnum
-from .types import SQUARES, Squares, CastlingRights
+from .types import SQUARES, Squares, CastlingRights, PieceType
 
 
 class MoveFlags(IntEnum):
@@ -74,10 +74,17 @@ class Move:
         return self.flags & MoveFlags.PROMOTION
 
     @property
-    def promotion_piece_str(self):
+    def promotion_piece_type(self):
         if not self.is_promotion:
             return None
-        return self._flags.name.split("_")[1].lower()
+        if self._flags in (MoveFlags.PROMOTION, MoveFlags.PROMOTION_N_CAPTURE):
+            return PieceType.KNIGHT
+        elif self._flags in (MoveFlags.PROMOTION_Q, MoveFlags.PROMOTION_Q_CAPTURE):
+            return PieceType.QUEEN
+        elif self._flags in (MoveFlags.PROMOTION_R, MoveFlags.PROMOTION_R_CAPTURE):
+            return PieceType.ROOK
+        elif self._flags in (MoveFlags.PROMOTION_B, MoveFlags.PROMOTION_B_CAPTURE):
+            return PieceType.BISHOP
 
     @property
     def _to(self):

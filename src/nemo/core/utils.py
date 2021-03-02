@@ -1,3 +1,5 @@
+from cProfile import Profile
+
 from .types import Bitboard
 
 BITSCAN_INDEX = [
@@ -92,7 +94,7 @@ def popcnt(v: int) -> int:
 
 
 def iter_lsb(bb: int) -> "Generator[int, None, None]":
-    bb = int(bb)
+    # bb = int(bb)
     while bb:
         _lsb = lsb(bb)
         yield _lsb
@@ -103,9 +105,6 @@ def bitscan_forward(bb: int):
 
 
 def iter_bitscan_forward(bb: int) -> "Generator[int, None, None]":
-    if bb == 0:
-        return
-
     for isolated_lsb in iter_lsb(bb):
         yield BITSCAN_INDEX[Bitboard(isolated_lsb * DEBRUIJN_CONST) >> 58]
 
@@ -132,3 +131,16 @@ def antidiag_mask(s: int) -> int:
     n = -d & (d >> 31)
     s = d & (-d >> 31)
     return (md >> s) << n
+
+
+class SectionProfiler:
+    def __init__(self, sort_by="cumulative"):
+        self.__sort_by = sort_by
+        self.profiler = Profile()
+
+    def __enter__(self):
+        self.profiler.enable()
+        return self
+
+    def __exit__(self, *args):
+        self.profiler.print_stats(sort=self.__sort_by)

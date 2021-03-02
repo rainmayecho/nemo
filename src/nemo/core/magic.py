@@ -180,10 +180,6 @@ def generate_magic(s: int, bits: int, bishop: bool):
             return magic, used
 
 
-with open("magic.pickle", "rb") as fp:
-    BISHOP_ATTACKS, ROOK_ATTACKS, BISHOP_MAGIC, ROOK_MAGIC = load(fp)
-
-
 class Magic:
     @staticmethod
     def bishop_attacks(s: int, occ: Bitboard) -> Bitboard:
@@ -224,4 +220,8 @@ def regenerate_magic():
         dump((BISHOP_ATTACKS, ROOK_ATTACKS, BISHOP_MAGIC, ROOK_MAGIC), fp, protocol=HIGHEST_PROTOCOL)
 
 
-
+try:
+    with open("magic.pickle", "rb") as fp:
+        BISHOP_ATTACKS, ROOK_ATTACKS, BISHOP_MAGIC, ROOK_MAGIC = load(fp)
+except Exception:
+    regenerate_magic()

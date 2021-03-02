@@ -84,7 +84,7 @@ class Position:
             self.boards.remove_piece(_from)
             self.boards.place_piece(_to, piece)
         elif move.is_promotion:
-            promotion_piece = PIECE_REGISTRY[move.promotion_piece_str](color)
+            promotion_piece = PIECE_REGISTRY[move.promotion_piece_type](color)
             self.boards.remove_piece(_from)
             captured = self.boards.place_piece(_to, promotion_piece)
         elif move.is_capture:
@@ -129,7 +129,8 @@ class Position:
             promoted = self.boards.remove_piece(_from)  # remove the promoted piece
             assert promoted._type in PROMOTABLE
             self.boards.place_piece(_to, pawn)
-            self.boards.place_piece(_from, captured)
+            if captured:
+                self.boards.place_piece(_from, captured)
         elif move.is_capture:
             # assert captured is not None
             self.boards.remove_piece(_from)

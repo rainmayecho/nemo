@@ -1,47 +1,48 @@
 from abc import ABC, abstractmethod
-from collections import deque
+from collections import deque, defaultdict
 from enum import IntEnum
 from functools import reduce, lru_cache
 from itertools import chain
 from operator import ior
-from typing import Union, NamedTuple, Generator
+from typing import Union, NamedTuple, Generator, Dict
 
 from .constants import MIN_SQUARE, MAX_SQUARE, MAX_INT, STARTING_FEN
 
 
-class Bitboard(int):
-    def __new__(cls, value):
-        return super().__new__(cls, value & MAX_INT)
+Bitboard = lambda v: int(v) & MAX_INT
+# class Bitboard(int):
+#     def __new__(cls, value):
+#         return super().__new__(cls, value & MAX_INT)
 
-    def __invert__(self):
-        return self.__class__(MAX_INT ^ self)
+#     def __invert__(self):
+#         return self.__class__(MAX_INT ^ self)
 
-    def __and__(self, other):
-        return self.__class__(int(self) & int(other))
+#     def __and__(self, other):
+#         return self.__class__(int(self) & int(other))
 
-    def __rand__(self, other):
-        return self.__class__(int(self) & int(other))
+#     def __rand__(self, other):
+#         return self.__class__(int(self) & int(other))
 
-    def __xor__(self, other):
-        return self.__class__(int(self) ^ int(other))
+#     def __xor__(self, other):
+#         return self.__class__(int(self) ^ int(other))
 
-    def __rxor__(self, other):
-        return self.__class__(int(self) ^ int(other))
+#     def __rxor__(self, other):
+#         return self.__class__(int(self) ^ int(other))
 
-    def __or__(self, other):
-        return self.__class__(int(self) | int(other))
+#     def __or__(self, other):
+#         return self.__class__(int(self) | int(other))
 
-    def __ror__(self, other):
-        return self.__class__(int(self) | int(other))
+#     def __ror__(self, other):
+#         return self.__class__(int(self) | int(other))
 
-    def __repr__(self):
-        n = 8
-        b = format(self, "064b")
-        f = lambda c: " . " if c == "0" else " * "
-        return "\n\n".join([" ".join(map(f, b[i : i + n][::-1])) for i in range(0, len(b), n)])
+#     def __repr__(self):
+#         n = 8
+#         b = format(self, "064b")
+#         f = lambda c: " . " if c == "0" else " * "
+#         return "\n\n".join([" ".join(map(f, b[i : i + n][::-1])) for i in range(0, len(b), n)])
 
-    def __str__(self):
-        return repr(self)
+#     def __str__(self):
+#         return repr(self)
 
 
 EMPTY = Bitboard(0)
@@ -278,23 +279,38 @@ class AbstractPiece(ABC):
 class StackedBitboard:
     def __init__(self, bitboards_by_color_and_type, square_occupancy):
         self.__boards = bitboards_by_color_and_type
+        self.__color_occupancy = [
+            self.__white_occupancy(),
+            self.__black_occupancy(),
+        ]
         self.__square_occupancy = square_occupancy
-        self.__checkers = Bitboard(0)
+        self.__attack_sets = self.__get_attack_sets()
+        self.__checkers_bb = [
+            self.__checkers(Color.WHITE),
+            self.__checkers(Color.BLACK),
+        ]
 
     @staticmethod
-    @lru_cache(maxsize=None)
     def test_piece(c: Color, piece_type: PieceType):
         return PIECE_REGISTRY[piece_type](c)
 
-    def checkers(self, c: Color) -> Bitboard:
+
+    def __get_attack_sets(self) -> Dict[Color, Dict[PieceType, Bitboard]]:
+        attack_sets = {
+            Color.WHITE: {}, Color.BLACK: {}
+        }
+        for c in self.__boards:
+            for piece_type, piece_bb in self.__boards[c].items():
+                attack_sets[c][piece_type] = self.test_piece(c, piece_type).attack_set(self)
+        return attack_sets
+
+    def __checkers(self, c: Color) -> Bitboard:
         """Bitboard representing pieces that can check the King of color `c`"""
         checkers_bb = Bitboard(0)
         king_bb = self.__boards[c][PieceType.KING]
-        for piece_type, piece_bb in self.__boards[~c]:
-            if piece_type != PieceType.KING:
-                piece = test_piece(c, piece_type)
-                if piece.attack_set & king_bb:
-                    checkers_bb |= self.board_for(piece)
+        for piece_type, attack_set in self.__attack_sets[~c].items():
+            if attack_set & king_bb:
+                checkers_bb |= self.__boards[c][piece_type]
         return checkers_bb
 
     def king_in_check(self, c: Color):
@@ -307,16 +323,14 @@ class StackedBitboard:
                     return True
         return False
 
-    @property
-    def white_occupancy(self):
+    def __white_occupancy(self):
         occ = Bitboard(EMPTY)
         for piece_type, bb in self.__boards[Color.WHITE].items():
             if piece_type != PieceType.ENPASSANT:
                 occ |= bb
         return occ
 
-    @property
-    def black_occupancy(self):
+    def __black_occupancy(self):
         occ = Bitboard(EMPTY)
         for piece_type, bb in self.__boards[Color.BLACK].items():
             if piece_type != PieceType.ENPASSANT:
@@ -341,6 +355,12 @@ class StackedBitboard:
     def board_for(self, p: "Piece") -> Bitboard:
         return self.__boards[p.color][p._type]
 
+    def by_color(self, c: Color) -> Bitboard:
+        return self.__color_occupancy[c]
+
+    def king_bb(self, c: Color) -> Bitboard:
+        return self.__boards[c][PieceType.KING]
+
     def place_piece(self, s: "Square", p: "Piece") -> None:
         if not isinstance(s, Square):
             s = Square(s)
@@ -348,9 +368,16 @@ class StackedBitboard:
         existing_piece_at_s = self.piece_at(s)
         placing_piece_bb = self.board_for(p)
         c = p.color
+        s_bb = s.bitboard
         if existing_piece_at_s is not None:
-            self.__boards[~c][existing_piece_at_s._type] ^= s.bitboard
-        self.__boards[c][p._type] ^= s.bitboard  # Set the bit for the new piece
+            _type = existing_piece_at_s._type
+            self.__boards[~c][_type] ^= s_bb
+            self.__color_occupancy[~c] ^= s_bb
+            self.__attack_sets[~c][_type] = self.test_piece(c, _type).attack_set(self)
+        self.__boards[c][p._type] ^= s_bb  # Set the bit for the new piece
+        self.__color_occupancy[c] ^= s_bb
+        self.__attack_sets[c][p._type] = self.test_piece(c, p._type).attack_set(self)
+
         self.squares[s] = p
         return existing_piece_at_s
 
@@ -358,8 +385,13 @@ class StackedBitboard:
         if not isinstance(s, Square):
             s = Square(s)
         existing_piece_at_s = self.piece_at(s)
+        s_bb = s.bitboard
         if existing_piece_at_s is not None:
-            self.__boards[existing_piece_at_s.color][existing_piece_at_s._type] ^= s.bitboard
+            c = existing_piece_at_s.color
+            _type = existing_piece_at_s._type
+            self.__boards[c][_type] ^= s_bb
+            self.__color_occupancy[c] ^= s_bb
+            self.__attack_sets[c][_type] = self.test_piece(c, _type).attack_set(self)
         self.squares[s] = None
         return existing_piece_at_s
 
@@ -373,15 +405,15 @@ class StackedBitboard:
         for piece_type in self.__boards[c]:
             yield self.test_piece(c, piece_type)
 
-    def __getitem__(self, key):
-        if isinstance(key, Color):
-            return getattr(self, f"{key.name.lower()}_occupancy")
-        elif isinstance(key, AbstractPiece):
-            return self.board_for(key)
-        elif isinstance(key, (Square, int)):
-            return self.squares[key]
-        else:
-            raise TypeError("unsupported type for lookup")
+    # def __getitem__(self, key):
+    #     if isinstance(key, Color):
+    #         return getattr(self, f"{key.name.lower()}_occupancy")
+    #     elif isinstance(key, AbstractPiece):
+    #         return self.board_for(key)
+    #     elif isinstance(key, (Square, int)):
+    #         return self.squares[key]
+    #     else:
+    #         raise TypeError("unsupported type for lookup")
 
     def __hash__(self):
         return hash(tuple(self.squares))

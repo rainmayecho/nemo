@@ -1,10 +1,10 @@
+from sys import argv
+
 from .position import Position
 from .constants import STARTING_FEN
 
-skip = False
 
-def perft(depth: int = 1, position=None, fen=STARTING_FEN):
-    global skip
+def perft(depth: int = 1, fen=STARTING_FEN, position=None):
     position = position or Position(fen=fen)
     n = 0
     moves = list(position.pseudo_legal_moves)
@@ -13,10 +13,7 @@ def perft(depth: int = 1, position=None, fen=STARTING_FEN):
     for move in moves:
         position.make_move(move)
         if position.is_legal():
-            if not skip:
-                print(position)
-                skip = bool(input())
-            n += perft(depth - 1, position)
+            n += perft(depth - 1, position=position)
         position.unmake_move(move)
 
     return n
