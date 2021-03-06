@@ -1,6 +1,6 @@
 from cProfile import Profile
 
-from .types import Bitboard
+from .constants import MAX_INT
 
 BITSCAN_INDEX = [
     0,
@@ -136,7 +136,9 @@ BIT_TABLE = [
     8,
 ]
 
-DEBRUIJN_CONST = Bitboard(0x03F79D71B4CB0A89)
+_bb = lambda v: v & MAX_INT
+
+DEBRUIJN_CONST = _bb(0x03F79D71B4CB0A89)
 
 
 def lsb(v: int) -> int:
@@ -158,12 +160,12 @@ def iter_lsb(bb: int) -> "Generator[int, None, None]":
 
 
 def bitscan_forward(bb: int):
-    return BITSCAN_INDEX[Bitboard((bb & -bb) * DEBRUIJN_CONST) >> 58]
+    return BITSCAN_INDEX[_bb((bb & -bb) * DEBRUIJN_CONST) >> 58]
 
 
 def iter_bitscan_forward(bb: int) -> "Generator[int, None, None]":
     for isolated_lsb in iter_lsb(bb):
-        yield BITSCAN_INDEX[Bitboard(isolated_lsb * DEBRUIJN_CONST) >> 58]
+        yield BITSCAN_INDEX[_bb(isolated_lsb * DEBRUIJN_CONST) >> 58]
 
 
 def rank_mask(s: int) -> int:

@@ -7,6 +7,7 @@ from operator import ior
 from typing import Union, NamedTuple, Generator, Dict
 
 from .constants import MIN_SQUARE, MAX_SQUARE, MAX_INT, STARTING_FEN
+from .utils import bitscan_forward
 
 
 class _Bitboard(int):
@@ -356,6 +357,10 @@ class StackedBitboard:
 
     def king_bb(self, c: Color) -> Bitboard:
         return self.__boards[c][PieceType.KING]
+
+    def get_king(self, c: Color) -> Bitboard:
+        s = bitscan_forward(self.__boards[c][PieceType.KING])
+        return self.__square_occupancy[s]
 
     def place_piece(self, s: "Square", p: "Piece") -> None:
         if not isinstance(s, Square):

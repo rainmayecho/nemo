@@ -76,6 +76,22 @@ class Position:
     def is_legal(self):
         return not self.boards.king_in_check(~self.state.turn)
 
+    def is_check(self):
+        return self.boards.king_in_check(self.state.turn)
+
+    def is_checkmate(self):
+        c = self.state.turn
+        if self.boards.king_in_check(c):
+            king = self.boards.get_king(c)
+            # TODO:
+            # Check for ways to capture the attacker
+            #   - Double check can't be captured.
+            # Check for ways to block the attack set
+            #   - Double check can't be blocked.
+            # Check for legal moves for king
+            #   move set & opponent attack set
+
+
     def make_move(self, move: Move) -> None:
         _from, _to = move
         color = self.state.turn
