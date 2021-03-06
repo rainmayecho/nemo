@@ -1,5 +1,5 @@
 from enum import IntEnum
-from .types import SQUARES, Squares, CastlingRights, PieceType
+from .types import SQUARES, Squares, CastlingRights, PieceType, INV_PIECE_TYPE_MAP
 
 
 class MoveFlags(IntEnum):
@@ -113,11 +113,12 @@ class Move:
         return f"<Move {SQUARES[self._from].name.lower()} to {SQUARES[self._to].name.lower()} flags={self.flags}>"
 
     def __str__(self) -> str:
-        return f"{SQUARES[self._from].name.lower()}{SQUARES[self._to].name.lower()}{self.promotion_piece_str}"
+        return f"{SQUARES[self._from].name.lower()}{SQUARES[self._to].name.lower()}{INV_PIECE_TYPE_MAP.get(self.promotion_piece_type, '')}"
 
 
 class MoveList:
     """Encapsulates ordering a sequence of candidate moves"""
+
     def __init__(self, moves):
         self.__moves = moves
 

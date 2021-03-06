@@ -2,7 +2,17 @@ from collections import defaultdict
 
 from .constants import STARTING_FEN
 from .piece import Piece
-from .types import Bitboard, Color, PIECE_REGISTRY, PROMOTABLE, Square, Squares, StackedBitboard, State
+from .types import (
+    Bitboard,
+    Color,
+    PieceType,
+    PIECE_REGISTRY,
+    PROMOTABLE,
+    Square,
+    Squares,
+    StackedBitboard,
+    State,
+)
 from .move import Move
 from .move_gen import relative_rook_squares, square_above, square_below
 
@@ -35,7 +45,6 @@ class Position:
             boards[Color.WHITE][piece_type] = Bitboard(0)
             boards[Color.BLACK][piece_type] = Bitboard(0)
 
-
         for i, row in enumerate(rows):
             j = 0
             for c in row:
@@ -45,11 +54,10 @@ class Position:
                     idx = i * 8 + j
                     bb = boards[color][piece._type] | (1 << idx)
                     square_occupancy[idx] = piece
-                    boards[color][piece._type] = bb
+                    boards[color][piece._type] |= bb
                     j += 1
                 else:
                     j += int(c)
-
         self.__boards = StackedBitboard(boards, square_occupancy)
         self.__state = State(
             turn,
@@ -63,11 +71,10 @@ class Position:
     def pseudo_legal_moves(self):
         c = self.state.turn
         for test_piece in self.boards.iterpieces(c):
-            yield from iter(test_piece.pseudo_legal_moves(self.bitboards))
+            yield from iter(test_piece.pseudo_legal_moves(self.bitboards, self.state))
 
     def is_legal(self):
         return not self.boards.king_in_check(~self.state.turn)
-
 
     def make_move(self, move: Move) -> None:
         _from, _to = move
@@ -75,7 +82,6 @@ class Position:
         captured = None
         piece = self.boards.piece_at(_from)
         # assert piece is not None
-
         if move.is_enpassant_capture:
             self.boards.remove_piece(_from)
             self.boards.place_piece(_to, piece)
@@ -98,17 +104,22 @@ class Position:
             self.boards.place_piece(_to, king)  # place king
             self.boards.place_piece(r_to, rook)  # place rook
         else:
-            # assert move.is_quiet
             self.boards.remove_piece(_from)
             self.boards.place_piece(_to, piece)
 
+        castling_rights_mask = 0
+        if piece._type == PieceType.KING:
+            castling_rights_mask = 3 << (2 * color)
+        elif piece._type == PieceType.ROOK:
+            b = int(relative_rook_squares(color, short=False)[0] == _from) + 1
+            castling_rights_mask = b << (2 * color)
+
         ep_square = square_below(color, move.ep_square_premask)
         self.state.push(
-            castling=move.castling_rights_premask,
+            castling=castling_rights_mask,
             captured=captured,
             ep_square=ep_square,
         )
-
 
     def unmake_move(self, _move: Move) -> None:
         move = ~_move
@@ -147,8 +158,6 @@ class Position:
             # assert move.is_quiet
             self.boards.remove_piece(_from)
             self.boards.place_piece(_to, piece)
-
-
 
     @property
     def state(self):
@@ -199,7 +208,9 @@ def test_pawns():
     assert str(white_pawn.captures(p.bitboards)[0]) == "e5d6"
     assert len(black_pawn.captures(p.bitboards)) == 0
 
-    p = Position(fen="rnbqkbnr/1pppppPp/8/8/8/8/PpPPP1PP/RNBQKBNR w KQkq - 0 5")  # captures + promotions
+    p = Position(
+        fen="rnbqkbnr/1pppppPp/8/8/8/8/PpPPP1PP/RNBQKBNR w KQkq - 0 5"
+    )  # captures + promotions
     assert len(white_pawn.captures(p.bitboards)) == 8
     assert len(black_pawn.captures(p.bitboards)) == 8
     assert white_pawn.captures(p.bitboards)[0].is_promotion
@@ -216,5 +227,3 @@ def test_pins():
 
 def test_promotions():
     pass
-
-

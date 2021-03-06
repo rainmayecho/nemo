@@ -9,40 +9,39 @@ from typing import Union, NamedTuple, Generator, Dict
 from .constants import MIN_SQUARE, MAX_SQUARE, MAX_INT, STARTING_FEN
 
 
-Bitboard = lambda v: int(v) & MAX_INT
-# class Bitboard(int):
-#     def __new__(cls, value):
-#         return super().__new__(cls, value & MAX_INT)
+class _Bitboard(int):
+    def __invert__(self):
+        return self.__class__(MAX_INT ^ self)
 
-#     def __invert__(self):
-#         return self.__class__(MAX_INT ^ self)
+    def __and__(self, other):
+        return self.__class__(int(self) & int(other))
 
-#     def __and__(self, other):
-#         return self.__class__(int(self) & int(other))
+    def __rand__(self, other):
+        return self.__class__(int(self) & int(other))
 
-#     def __rand__(self, other):
-#         return self.__class__(int(self) & int(other))
+    def __xor__(self, other):
+        return self.__class__(int(self) ^ int(other))
 
-#     def __xor__(self, other):
-#         return self.__class__(int(self) ^ int(other))
+    def __rxor__(self, other):
+        return self.__class__(int(self) ^ int(other))
 
-#     def __rxor__(self, other):
-#         return self.__class__(int(self) ^ int(other))
+    def __or__(self, other):
+        return self.__class__(int(self) | int(other))
 
-#     def __or__(self, other):
-#         return self.__class__(int(self) | int(other))
+    def __ror__(self, other):
+        return self.__class__(int(self) | int(other))
 
-#     def __ror__(self, other):
-#         return self.__class__(int(self) | int(other))
+    def __repr__(self):
+        n = 8
+        b = format(self, "064b")
+        f = lambda c: " . " if c == "0" else " * "
+        return "\n\n".join([" ".join(map(f, b[i : i + n][::-1])) for i in range(0, len(b), n)])
 
-#     def __repr__(self):
-#         n = 8
-#         b = format(self, "064b")
-#         f = lambda c: " . " if c == "0" else " * "
-#         return "\n\n".join([" ".join(map(f, b[i : i + n][::-1])) for i in range(0, len(b), n)])
+    def __str__(self):
+        return repr(self)
 
-#     def __str__(self):
-#         return repr(self)
+
+Bitboard = lambda v: _Bitboard(v) & MAX_INT
 
 
 EMPTY = Bitboard(0)
@@ -217,7 +216,7 @@ PIECE_TYPE_MAP = {
     "q": PieceType.QUEEN,
     "k": PieceType.KING,
     "ep": PieceType.ENPASSANT,
-    "__default__": "Piece"
+    "__default__": "Piece",
 }
 INV_PIECE_TYPE_MAP = {v: k for k, v in PIECE_TYPE_MAP.items()}
 PIECE_SYMBOL_MAP = {
@@ -239,6 +238,7 @@ PIECE_SYMBOL_MAP = {
 PROMOTABLE = {PieceType.KNIGHT, PieceType.BISHOP, PieceType.ROOK, PieceType.QUEEN}
 
 PIECE_REGISTRY = {}
+
 
 class AbstractPiece(ABC):
     _type: PieceType = None
@@ -271,7 +271,6 @@ class AbstractPiece(ABC):
     def attack_set(self, *args, **kwargs):
         raise NotImplementedError()
 
-
     def __str__(self):
         return PIECE_SYMBOL_MAP[(self._type, 1 - self.color)]
 
@@ -294,11 +293,8 @@ class StackedBitboard:
     def test_piece(c: Color, piece_type: PieceType):
         return PIECE_REGISTRY[piece_type](c)
 
-
     def __get_attack_sets(self) -> Dict[Color, Dict[PieceType, Bitboard]]:
-        attack_sets = {
-            Color.WHITE: {}, Color.BLACK: {}
-        }
+        attack_sets = {Color.WHITE: {}, Color.BLACK: {}}
         for c in self.__boards:
             for piece_type, piece_bb in self.__boards[c].items():
                 attack_sets[c][piece_type] = self.test_piece(c, piece_type).attack_set(self)
@@ -405,19 +401,8 @@ class StackedBitboard:
         for piece_type in self.__boards[c]:
             yield self.test_piece(c, piece_type)
 
-    # def __getitem__(self, key):
-    #     if isinstance(key, Color):
-    #         return getattr(self, f"{key.name.lower()}_occupancy")
-    #     elif isinstance(key, AbstractPiece):
-    #         return self.board_for(key)
-    #     elif isinstance(key, (Square, int)):
-    #         return self.squares[key]
-    #     else:
-    #         raise TypeError("unsupported type for lookup")
-
     def __hash__(self):
         return hash(tuple(self.squares))
-
 
 
 class CastlingRightsEnum(AutoIncrementingEnum):
@@ -452,6 +437,7 @@ class CastlingRights(int):
     │_______ b queenside
 
     """
+
     def __new__(cls, value):
         assert value >= 0 and value <= 15
         return super().__new__(cls, value)
@@ -482,11 +468,15 @@ class CastlingRights(int):
         return CastlingRightsEnum(self).name
 
 
-SubState = NamedTuple("Substate", [
-    ("castling", CastlingRights),
-    ("captured", AbstractPiece),
-    ("ep", Square),
-])
+SubState = NamedTuple(
+    "Substate",
+    [
+        ("castling", CastlingRights),
+        ("captured", AbstractPiece),
+        ("ep", Square),
+    ],
+)
+
 
 class State:
     def __init__(
@@ -497,7 +487,9 @@ class State:
         half_move_clock: int = 0,
         full_move_clock: int = 0,
     ):
-        ep_square = Square(Squares[ep_square.upper()]._value_) if ep_square not in ("-", None) else None
+        ep_square = (
+            Square(Squares[ep_square.upper()]._value_) if ep_square not in ("-", None) else None
+        )
         castling_rights = castling_rights if castling_rights != "-" else "none"
         castling_rights = CastlingRights(CastlingRightsEnum[castling_rights]._value_)
 
@@ -506,13 +498,15 @@ class State:
         self.turn = Color.WHITE if turn in ("w", 0) else Color.BLACK
         self.__stack = deque([SubState(castling=castling_rights, captured=None, ep=ep_square)])
 
-
     def push(self, captured=None, castling=None, ep_square=None):
         self.full_move_clock += 1
         self.turn = ~self.turn
         cur = self.__stack[0]
+        # print("Castling state: ", cur.castling)
+        # print("Castling state toggle: ", castling)
+        # input()
         _s = SubState(
-            castling=cur.castling ^ (castling << self.turn),
+            castling=cur.castling ^ castling,
             captured=captured,
             ep=ep_square,
         )

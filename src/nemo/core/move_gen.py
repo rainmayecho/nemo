@@ -70,10 +70,17 @@ def square_above(color: Color, s: Square) -> int:
 def relative_rook_squares(color: Color, short: bool = True) -> Tuple[Square]:
     """Return the rook squares from, to by color and castling type"""
     if color == Color.WHITE:
-        return (Square.H1, Square.F1) if short else (Square.A1, Square.D1)
+        return (
+            (Squares.H1._value_, Squares.F1._value_)
+            if short
+            else (Squares.A1._value_, Squares.D1._value_)
+        )
     elif color == Color.BLACK:
-        return (Square.H8, Square.F8) if short else (Square.A8, Square.D8)
-
+        return (
+            (Squares.H8._value_, Squares.F8._value_)
+            if short
+            else (Squares.A8._value_, Squares.D8._value_)
+        )
 
 
 def knight_attacks(s: int) -> int:

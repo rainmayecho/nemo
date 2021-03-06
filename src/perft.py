@@ -11,5 +11,5 @@ if __name__ == "__main__":
         # with SectionProfiler():
         for depth in range(1, 5):
             n = perft(int(depth), fen=fen)
-            print(f"depth={depth} nodes={n} for fen={fen}")
+            print(f"depth={depth} fen={fen}:\n{n}")
         print("\n")
