@@ -397,7 +397,8 @@ class StackedBitboard:
         return existing_piece_at_s
 
     def set_enpassant_board(self, c: Color, s: Square) -> None:
-        self.__boards[c][PieceType.ENPASSANT] = s.bitboard
+        bb = s.bitboard if s is not None else EMPTY
+        self.__boards[c][PieceType.ENPASSANT] = bb
 
     def ep_board(self, c: Color) -> Bitboard:
         return self.__boards[c][PieceType.ENPASSANT]

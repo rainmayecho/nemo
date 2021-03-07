@@ -1,14 +1,13 @@
 from json import dumps
-from sys import argv
 
-from .position import Position
 from .constants import STARTING_FEN
 from .move import MoveFlags
-from .utils import lsb
+from .position import Position
+
 
 
 class NodeStat:
-    ATTRS = ("nodes", "captures", "ep", "castles", "promotions")
+    ATTRS = ("nodes", "captures", "ep", "castles", "promotions", "checks")
 
     def __init__(self, n=0):
         self.nodes = n
@@ -16,16 +15,15 @@ class NodeStat:
         self.ep = 0
         self.castles = 0
         self.promotions = 0
+        self.checks = 0
 
-    def update_from_move(self, move: "Move") -> None:
-        if move.flags in (MoveFlags.KINGSIDE_CASTLE, MoveFlags.QUEENSIDE_CASTLE):
-            self.castles += 1
-        elif move.is_capture:
-            self.captures += 1
-        elif move.is_enpassant_capture:
-            self.ep += 1
-        elif move.is_promotion:
-            self.promotions += 1
+    def update_from_move(self, move: "Move", position: Position) -> None:
+        self.castles += bool(move.flags in (MoveFlags.KINGSIDE_CASTLE, MoveFlags.QUEENSIDE_CASTLE))
+        self.captures += bool(move.is_capture)
+        self.ep += bool(move.is_enpassant_capture)
+        self.promotions += bool(move.is_promotion)
+        self.checks += bool(position.is_check())
+        return self
 
     def __add__(self, other: "NodeStat"):
         for k in self.ATTRS:
@@ -37,17 +35,15 @@ class NodeStat:
         return dumps({k: getattr(self, k, 0) for k in self.ATTRS}, separators=(",", ": "), indent=4)
 
 
-def perft(depth: int = 1, fen=STARTING_FEN, position=None) -> NodeStat:
+def perft(depth: int = 1, fen=STARTING_FEN, position=None, move=None) -> NodeStat:
     position = position or Position(fen=fen)
-    n = NodeStat()
     moves = list(position.pseudo_legal_moves)
+    n = NodeStat()
     if not depth:
-        return NodeStat(1)
+        return NodeStat(1).update_from_move(move, position)
     for move in moves:
         position.make_move(move)
         if position.is_legal():
-            n += perft(depth - 1, position=position)
-            n.update_from_move(move)
+            n += perft(depth - 1, position=position, move=move)
         position.unmake_move(move)
-
     return n

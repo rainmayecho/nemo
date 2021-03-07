@@ -101,7 +101,7 @@ class Position:
         if move.is_enpassant_capture:
             self.boards.remove_piece(_from)
             self.boards.place_piece(_to, piece)
-            captured = self.boards.remove_piece(square_below(_to, color))
+            captured = self.boards.remove_piece(square_below(color, _to))
         elif move.is_double_pawn_push:
             self.boards.remove_piece(_from)
             self.boards.place_piece(_to, piece)
@@ -130,11 +130,12 @@ class Position:
             b = int(relative_rook_squares(color, short=False)[0] == _from) + 1
             castling_rights_mask = b << (2 * color)
 
-        ep_square = square_below(color, move.ep_square_premask)
+        new_ep_square = square_below(color, move.ep_square_premask)
+        self.boards.set_enpassant_board(color, new_ep_square)
         self.state.push(
             castling=castling_rights_mask,
             captured=captured,
-            ep_square=ep_square,
+            ep_square=new_ep_square,
         )
 
     def unmake_move(self, _move: Move) -> None:
@@ -143,11 +144,13 @@ class Position:
         castling, captured, ep_square = self.state.pop()
         color = self.state.turn
         piece = self.boards.piece_at(_from)
+
+        self.boards.set_enpassant_board(color, ep_square)
         # assert piece is not None
         if move.is_enpassant_capture:
             self.boards.remove_piece(_from)
             self.boards.place_piece(_to, piece)
-            self.boards.place_piece(square_below(_from, color), captured)
+            self.boards.place_piece(square_below(color, _from), captured)
         elif move.is_double_pawn_push:
             self.boards.remove_piece(_from)
             self.boards.place_piece(_to, piece)
