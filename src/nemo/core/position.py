@@ -10,9 +10,9 @@ from .types import (
     PROMOTABLE,
     Square,
     Squares,
-    StackedBitboard,
     State,
 )
+from .stacked_bitboard import StackedBitboard
 from .move import Move
 from .move_gen import relative_rook_squares, square_above, square_below
 
@@ -28,8 +28,9 @@ class Position:
         self.__state = None
 
     def from_fen(self, fen):
-        ranks, turn, castling_rights, ep_square, hmc, fmc = fen.split(" ")
-        i = 0
+        split_fen = fen.split(" ")
+        split_fen = split_fen + ["0", "1"] if len(split_fen) < 6 else split_fen
+        ranks, turn, castling_rights, ep_square, hmc, fmc = split_fen
         rows = ranks.split("/")[::-1]
         boards = defaultdict(lambda: defaultdict(lambda: Bitboard(0)))
         square_occupancy = [None] * 64
@@ -90,7 +91,6 @@ class Position:
             #   - Double check can't be blocked.
             # Check for legal moves for king
             #   move set & opponent attack set
-
 
     def make_move(self, move: Move) -> None:
         _from, _to = move

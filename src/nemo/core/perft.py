@@ -5,7 +5,6 @@ from .move import MoveFlags
 from .position import Position
 
 
-
 class NodeStat:
     ATTRS = ("nodes", "captures", "ep", "castles", "promotions", "checks")
 

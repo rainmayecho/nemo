@@ -11,26 +11,29 @@ from .utils import bitscan_forward
 
 
 class _Bitboard(int):
+    def hexstring(self):
+        return hex(self)
+
     def __invert__(self):
-        return self.__class__(MAX_INT ^ self)
+        return _Bitboard(MAX_INT ^ self)
 
     def __and__(self, other):
-        return self.__class__(int(self) & int(other))
+        return _Bitboard(int(other).__and__(self))
 
     def __rand__(self, other):
-        return self.__class__(int(self) & int(other))
+        return _Bitboard(int(other).__and__(self))
 
     def __xor__(self, other):
-        return self.__class__(int(self) ^ int(other))
+        return _Bitboard(int(other).__xor__(self))
 
     def __rxor__(self, other):
-        return self.__class__(int(self) ^ int(other))
+        return _Bitboard(int(other).__xor__(self))
 
     def __or__(self, other):
-        return self.__class__(int(self) | int(other))
+        return _Bitboard(int(other).__or__(self))
 
     def __ror__(self, other):
-        return self.__class__(int(self) | int(other))
+        return _Bitboard(int(other).__or__(self))
 
     def __repr__(self):
         n = 8
@@ -237,6 +240,15 @@ PIECE_SYMBOL_MAP = {
     (PieceType.KING, Color.BLACK): "♚",
 }
 PROMOTABLE = {PieceType.KNIGHT, PieceType.BISHOP, PieceType.ROOK, PieceType.QUEEN}
+CAN_CHECK = {PieceType.KNIGHT, PieceType.BISHOP, PieceType.ROOK, PieceType.QUEEN, PieceType.PAWN}
+ATTACKERS = {
+    PieceType.KNIGHT,
+    PieceType.BISHOP,
+    PieceType.ROOK,
+    PieceType.QUEEN,
+    PieceType.PAWN,
+    PieceType.KING,
+}
 
 PIECE_REGISTRY = {}
 
@@ -274,141 +286,6 @@ class AbstractPiece(ABC):
 
     def __str__(self):
         return PIECE_SYMBOL_MAP[(self._type, 1 - self.color)]
-
-
-class StackedBitboard:
-    def __init__(self, bitboards_by_color_and_type, square_occupancy):
-        self.__boards = bitboards_by_color_and_type
-        self.__color_occupancy = [
-            self.__white_occupancy(),
-            self.__black_occupancy(),
-        ]
-        self.__square_occupancy = square_occupancy
-        self.__attack_sets = self.__get_attack_sets()
-        self.__checkers_bb = [
-            self.__checkers(Color.WHITE),
-            self.__checkers(Color.BLACK),
-        ]
-
-    @staticmethod
-    def test_piece(c: Color, piece_type: PieceType):
-        return PIECE_REGISTRY[piece_type](c)
-
-    def __get_attack_sets(self) -> Dict[Color, Dict[PieceType, Bitboard]]:
-        attack_sets = {Color.WHITE: {}, Color.BLACK: {}}
-        for c in self.__boards:
-            for piece_type, piece_bb in self.__boards[c].items():
-                attack_sets[c][piece_type] = self.test_piece(c, piece_type).attack_set(self)
-        return attack_sets
-
-    def __checkers(self, c: Color) -> Bitboard:
-        """Bitboard representing pieces that can check the King of color `c`"""
-        checkers_bb = Bitboard(0)
-        king_bb = self.__boards[c][PieceType.KING]
-        for piece_type, attack_set in self.__attack_sets[~c].items():
-            if attack_set & king_bb:
-                checkers_bb |= self.__boards[c][piece_type]
-        return checkers_bb
-
-    def king_in_check(self, c: Color):
-        king_bb = self.__boards[c][PieceType.KING]
-        for piece_type, piece_bb in self.__boards[~c].items():
-            if piece_type not in (PieceType.KING, PieceType.ENPASSANT):
-                piece = self.test_piece(~c, piece_type)
-                # print(piece.attack_set(self) & king_bb)
-                if piece.attack_set(self) & king_bb:
-                    return True
-        return False
-
-    def __white_occupancy(self):
-        occ = Bitboard(EMPTY)
-        for piece_type, bb in self.__boards[Color.WHITE].items():
-            if piece_type != PieceType.ENPASSANT:
-                occ |= bb
-        return occ
-
-    def __black_occupancy(self):
-        occ = Bitboard(EMPTY)
-        for piece_type, bb in self.__boards[Color.BLACK].items():
-            if piece_type != PieceType.ENPASSANT:
-                occ |= bb
-        return occ
-
-    @property
-    def occupancy(self):
-        return self.white_occupancy | self.black_occupancy
-
-    @property
-    def squares(self):
-        return self.__square_occupancy
-
-    @property
-    def boards(self):
-        return self.__boards
-
-    def piece_at(self, s: int) -> "Piece":
-        return self.squares[s]
-
-    def board_for(self, p: "Piece") -> Bitboard:
-        return self.__boards[p.color][p._type]
-
-    def by_color(self, c: Color) -> Bitboard:
-        return self.__color_occupancy[c]
-
-    def king_bb(self, c: Color) -> Bitboard:
-        return self.__boards[c][PieceType.KING]
-
-    def get_king(self, c: Color) -> Bitboard:
-        s = bitscan_forward(self.__boards[c][PieceType.KING])
-        return self.__square_occupancy[s]
-
-    def place_piece(self, s: "Square", p: "Piece") -> None:
-        if not isinstance(s, Square):
-            s = Square(s)
-
-        existing_piece_at_s = self.piece_at(s)
-        placing_piece_bb = self.board_for(p)
-        c = p.color
-        s_bb = s.bitboard
-        if existing_piece_at_s is not None:
-            _type = existing_piece_at_s._type
-            self.__boards[~c][_type] ^= s_bb
-            self.__color_occupancy[~c] ^= s_bb
-            self.__attack_sets[~c][_type] = self.test_piece(c, _type).attack_set(self)
-        self.__boards[c][p._type] ^= s_bb  # Set the bit for the new piece
-        self.__color_occupancy[c] ^= s_bb
-        self.__attack_sets[c][p._type] = self.test_piece(c, p._type).attack_set(self)
-
-        self.squares[s] = p
-        return existing_piece_at_s
-
-    def remove_piece(self, s: "Square") -> None:
-        if not isinstance(s, Square):
-            s = Square(s)
-        existing_piece_at_s = self.piece_at(s)
-        s_bb = s.bitboard
-        if existing_piece_at_s is not None:
-            c = existing_piece_at_s.color
-            _type = existing_piece_at_s._type
-            self.__boards[c][_type] ^= s_bb
-            self.__color_occupancy[c] ^= s_bb
-            self.__attack_sets[c][_type] = self.test_piece(c, _type).attack_set(self)
-        self.squares[s] = None
-        return existing_piece_at_s
-
-    def set_enpassant_board(self, c: Color, s: Square) -> None:
-        bb = s.bitboard if s is not None else EMPTY
-        self.__boards[c][PieceType.ENPASSANT] = bb
-
-    def ep_board(self, c: Color) -> Bitboard:
-        return self.__boards[c][PieceType.ENPASSANT]
-
-    def iterpieces(self, c: Color) -> Generator[AbstractPiece, None, None]:
-        for piece_type in self.__boards[c]:
-            yield self.test_piece(c, piece_type)
-
-    def __hash__(self):
-        return hash(tuple(self.squares))
 
 
 class CastlingRightsEnum(AutoIncrementingEnum):
@@ -473,6 +350,11 @@ class CastlingRights(int):
     def __str__(self) -> str:
         return CastlingRightsEnum(self).name
 
+    def __getitem__(self, c: Color) -> int:
+        if c == Color.WHITE:
+            return self & 3
+        return self >> 2
+
 
 SubState = NamedTuple(
     "Substate",
@@ -529,6 +411,10 @@ class State:
     @property
     def castling_rights(self):
         return self.__stack[0].castling
+
+    @property
+    def ep_square(self):
+        return self.__stack[0].ep
 
     @property
     def fen_suffix(self) -> str:

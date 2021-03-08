@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from functools import lru_cache, partial
+from functools import reduce
+from operator import ior
 from typing import List, Generator
 
 from .constants import NE, NORTH, NW, SE, SOUTH, SW
@@ -24,19 +25,22 @@ from .move_gen import (
 )
 from .magic import Magic
 from .types import (
+    EMPTY,
     PIECE_REGISTRY,
     PIECE_SYMBOL_MAP,
     RANKS,
+    UNIVERSE,
     Bitboard,
     Color,
     AbstractPiece,
     PieceType,
     Ranks,
     Files,
-    StackedBitboard,
     State,
+    Square,
 )
-from .utils import iter_bitscan_forward, iter_lsb
+from .stacked_bitboard import StackedBitboard
+from .utils import iter_bitscan_forward, iter_lsb, lsb
 
 
 class Piece(AbstractPiece):
@@ -54,15 +58,18 @@ class Piece(AbstractPiece):
     def legal_moves(self, bitboards: StackedBitboard, state: State) -> List[Move]:
         return []
 
+    def attack_set_empty(self, bitboards: StackedBitboard, *args) -> Bitboard:
+        return self._attack_set_empty(self.color, bitboards.board_for(self), bitboards, *args)
+
     def attack_set(self, bitboards: StackedBitboard) -> Bitboard:
         return self._attack_set(self.color, bitboards.board_for(self), bitboards)
+
+    def attack_set_on(self, bitboards: StackedBitboard, s: Square) -> Bitboard:
+        return self._attack_set(self.color, bitboards.board_for(self), bitboards, Bitboard(1 << s))
 
 
 class Enpassant(Piece):
     _type = PieceType.ENPASSANT
-
-    def attack_set(self, *args):
-        return Bitboard(0)
 
     def captures(self, *args):
         return []
@@ -75,9 +82,17 @@ class Pawn(Piece):
     _type = PieceType.PAWN
 
     @staticmethod
-    def _attack_set(c: Color, pawns: Bitboard, bitboards: StackedBitboard) -> Bitboard:
+    def _attack_set_empty(
+        c: Color, pawns: Bitboard, bitboards: StackedBitboard, s_bb: Square = UNIVERSE
+    ) -> Bitboard:
+        return PAWN_ATTACKS[c](pawns & s_bb)
+
+    @staticmethod
+    def _attack_set(
+        c: Color, pawns: Bitboard, bitboards: StackedBitboard, s_bb: Square = UNIVERSE
+    ) -> Bitboard:
         occ = bitboards.by_color(~c) | bitboards.ep_board(~c)
-        return PAWN_ATTACKS[c](pawns) & occ
+        return PAWN_ATTACKS[c](pawns & s_bb) & occ
 
     @staticmethod
     def _captures(
@@ -147,20 +162,27 @@ class Knight(Piece):
     _type = PieceType.KNIGHT
 
     @staticmethod
-    def _attack_set(c: Color, knights: Bitboard, bitboards: Bitboard) -> Bitboard:
-        occ = bitboards.by_color(~c)
-        attack_set = Bitboard(0)
-        for knight_bb in iter_lsb(knights):
-            attack_set |= KNIGHT_ATTACKS[next(iter_bitscan_forward(knight_bb))]
-        return attack_set & occ
+    def _attack_set_empty(
+        c: Color, knights: Bitboard, bitboards: Bitboard, s_bb: Square = UNIVERSE
+    ) -> Bitboard:
+        return reduce(
+            ior, (KNIGHT_ATTACKS[_from] for _from in iter_bitscan_forward(knights & s_bb)), EMPTY
+        )
+
+    @staticmethod
+    def _attack_set(
+        c: Color, knights: Bitboard, bitboards: Bitboard, s_bb: Square = UNIVERSE
+    ) -> Bitboard:
+        return reduce(
+            ior, (KNIGHT_ATTACKS[_from] for _from in iter_bitscan_forward(knights & s_bb)), EMPTY
+        ) & bitboards.by_color(~c)
 
     @staticmethod
     def _captures(
         c: Color, knights: Bitboard, bitboards: StackedBitboard, state: State
     ) -> Generator[Move, None, None]:
         other_occupancy = bitboards.by_color(~c)
-        for knight_bb in iter_lsb(knights):
-            _from = next(iter_bitscan_forward(knight_bb))
+        for _from in iter_bitscan_forward(knights):
             attack_set = KNIGHT_ATTACKS[_from] & other_occupancy
             for _to in iter_bitscan_forward(attack_set):
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.CAPTURES)
@@ -171,8 +193,7 @@ class Knight(Piece):
     ) -> Generator[Move, None, None]:
         other_occupancy = bitboards.by_color(~c)
         unoccupied = ~(bitboards.by_color(c) | other_occupancy)
-        for knight_bb in iter_lsb(knights):
-            _from = next(iter_bitscan_forward(knight_bb))
+        for _from in iter_bitscan_forward(knights):
             jump_set = KNIGHT_ATTACKS[_from] & unoccupied
             for _to in iter_bitscan_forward(jump_set):
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.QUIET)
@@ -182,20 +203,27 @@ class King(Piece):
     _type = PieceType.KING
 
     @staticmethod
-    def _attack_set(c: Color, kings: Bitboard, bitboards: Bitboard) -> Bitboard:
-        occ = bitboards.by_color(~c)
-        attack_set = Bitboard(0)
-        for king_bb in iter_lsb(kings):
-            attack_set |= KING_ATTACKS[next(iter_bitscan_forward(king_bb))]
-        return attack_set & occ
+    def _attack_set_empty(
+        c: Color, knights: Bitboard, bitboards: Bitboard, s_bb: Square = UNIVERSE
+    ) -> Bitboard:
+        return reduce(
+            ior, (KING_ATTACKS[_from] for _from in iter_bitscan_forward(knights & s_bb)), EMPTY
+        )
+
+    @staticmethod
+    def _attack_set(
+        c: Color, knights: Bitboard, bitboards: Bitboard, s_bb: Square = UNIVERSE
+    ) -> Bitboard:
+        return reduce(
+            ior, (KING_ATTACKS[_from] for _from in iter_bitscan_forward(knights & s_bb)), EMPTY
+        ) & bitboards.by_color(~c)
 
     @staticmethod
     def _captures(
         c: Color, kings: Bitboard, bitboards: StackedBitboard, state: State
     ) -> Generator[Move, None, None]:
         other_occupancy = bitboards.by_color(~c)
-        for king_bb in iter_lsb(kings):
-            _from = next(iter_bitscan_forward(king_bb))
+        for _from in iter_bitscan_forward(kings):
             attack_set = KING_ATTACKS[_from] & other_occupancy
             for _to in iter_bitscan_forward(attack_set):
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.CAPTURES)
@@ -206,21 +234,22 @@ class King(Piece):
     ) -> Generator[Move, None, None]:
         other_occupancy = bitboards.by_color(~c)
         unoccupied = ~(bitboards.by_color(c) | other_occupancy)
-        _from = next(iter_bitscan_forward(king_bb))
-        move_set = KING_ATTACKS[_from] & unoccupied
-        for _to in iter_bitscan_forward(move_set):
-            yield Move(_from=_from, _to=_to, flags=MoveFlags.QUIET)
+        for _from in iter_bitscan_forward(king_bb):
+            move_set = KING_ATTACKS[_from] & unoccupied
+            for _to in iter_bitscan_forward(move_set):
+                yield Move(_from=_from, _to=_to, flags=MoveFlags.QUIET)
 
-        castling_rights = state.castling_rights >> (c * 2)
-        # if castling_rights and not ((1 << _from) & Files.E):
-        #     print("castling rights are not working")
+        castling_rights = state.castling_rights[c]
         if castling_rights and ((1 << _from) & Files.E):
             krsq = relative_rook_squares(c, short=True)[0]
             qrsq = relative_rook_squares(c, short=False)[0]
+            unattacked = ~(bitboards.attacks_by_color(~c))
 
-            ks_mask = 6 << krsq - 3
-            qs_mask = 7 << qrsq + 1
-            oo_clear = (ks_mask & unoccupied) == ks_mask
+            ks_mask = 6 << (krsq - 3)
+            qs_mask = 7 << (qrsq + 1)
+            unattacked_qs = ((qs_mask ^ lsb(qs_mask)) & unattacked) == (3 << (qrsq + 2))
+
+            oo_clear = (ks_mask & unoccupied & unattacked) == ks_mask
             ooo_clear = (qs_mask & unoccupied) == qs_mask
 
             kr = bitboards.piece_at(krsq)
@@ -237,6 +266,7 @@ class King(Piece):
             if (
                 castling_rights & 2
                 and ooo_clear
+                and unattacked_qs
                 and qr
                 and qr._type == PieceType.ROOK
                 and qr.color == c
@@ -251,10 +281,22 @@ class SlidingPiece(Piece):
     _attack_lookup = lambda s: 0
 
     @classmethod
-    def _attack_set(cls, c: Color, piece_bb: Bitboard, bitboards: Bitboard) -> Bitboard:
+    def _attack_set_empty(
+        cls, c: Color, piece_bb: Bitboard, bitboards: Bitboard, s_bb: Square = UNIVERSE
+    ) -> Bitboard:
         blockers = bitboards.by_color(c) | bitboards.by_color(~c)
         attack_set = Bitboard(0)
-        for _from in iter_bitscan_forward(piece_bb):
+        for _from in iter_bitscan_forward(piece_bb & s_bb):
+            attack_set |= cls._attack_lookup(_from, blockers)
+        return attack_set
+
+    @classmethod
+    def _attack_set(
+        cls, c: Color, piece_bb: Bitboard, bitboards: Bitboard, s_bb: Square = UNIVERSE
+    ) -> Bitboard:
+        blockers = bitboards.by_color(c) | bitboards.by_color(~c)
+        attack_set = Bitboard(0)
+        for _from in iter_bitscan_forward(piece_bb & s_bb):
             attack_set |= cls._attack_lookup(_from, blockers)
         return attack_set & bitboards.by_color(~c)
 
