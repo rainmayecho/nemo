@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Callable, Dict, List, Generator
+from typing import Callable, Dict, List, Generator, Tuple
 
 from .types import (
     AbstractPiece as Piece,
@@ -9,10 +9,12 @@ from .types import (
     Square,
     ATTACKERS,
     CAN_CHECK,
+    MOVABLE,
     EMPTY,
     PIECE_REGISTRY,
 )
 from .utils import iter_bitscan_forward
+from .zobrist import ZOBRIST_KEYS
 
 DEFAULT_FACTORY = lambda c, p: PIECE_REGISTRY[p](c)
 
@@ -167,12 +169,26 @@ class StackedBitboard:
         return self.__boards[c][PieceType.ENPASSANT]
 
     def iterpieces(self, c: Color) -> Generator[Piece, None, None]:
-        for piece_type in self.__boards[c]:
+        for piece_type in MOVABLE:
             yield self.test_piece(c, piece_type)
 
     def iter_check_candidates(self, c: Color) -> Generator[Piece, None, None]:
         for piece_type in CAN_CHECK:
             yield self.test_piece(c, piece_type)
 
-    def __hash__(self):
-        return hash(tuple(self.squares))
+    def iter_material(
+        self, c: Color
+    ) -> Generator[Tuple[PieceType, Bitboard, Bitboard], None, None]:
+        for piece_type in CAN_CHECK:
+            yield piece_type, self.__boards[c][piece_type], self.__boards[~c][piece_type]
+
+    def iter_attacks(self, c: Color) -> Generator[Tuple[PieceType, Bitboard, Bitboard], None, None]:
+        for piece_type in PieceType:
+            yield piece_type, self.__boards[c][piece_type], self.__boards[~c][piece_type]
+
+    def __hash__(self) -> int:
+        h = 0
+        for s, p in enumerate(self.__square_occupancy):
+            if p is not None:
+                h ^= ZOBRIST_KEYS[p.zobrist_index][s]
+        return h

@@ -241,6 +241,14 @@ PIECE_SYMBOL_MAP = {
 }
 PROMOTABLE = {PieceType.KNIGHT, PieceType.BISHOP, PieceType.ROOK, PieceType.QUEEN}
 CAN_CHECK = {PieceType.KNIGHT, PieceType.BISHOP, PieceType.ROOK, PieceType.QUEEN, PieceType.PAWN}
+MOVABLE = {
+    PieceType.KNIGHT,
+    PieceType.BISHOP,
+    PieceType.ROOK,
+    PieceType.QUEEN,
+    PieceType.PAWN,
+    PieceType.KING,
+}
 ATTACKERS = {
     PieceType.KNIGHT,
     PieceType.BISHOP,
@@ -258,6 +266,7 @@ class AbstractPiece(ABC):
 
     def __init__(self, color: Color):
         self.color = color
+        self.zobrist_index = None
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -403,10 +412,12 @@ class State:
     def pop(self):
         self.full_move_clock -= 1
         self.turn = ~self.turn
-        captured, ep_square = None, None
         if self.__stack:
             return self.__stack.popleft()
         return (CastlingRights(15), None, None)
+
+    def top(self):
+        return self.__stack[0]
 
     @property
     def castling_rights(self):
@@ -418,11 +429,14 @@ class State:
 
     @property
     def fen_suffix(self) -> str:
-        c, ep, cr, hmc, fmc = (
-            self.turn.name[0].lower(),
-            str(self.castling_rights),
-            self.ep_square.name.lower(),
-            self.half_move_clock,
-            self.full_move_clock,
+        eps = self.ep_square
+        return " ".join(
+            str(v)
+            for v in (
+                self.turn.name[0].lower(),
+                str(self.castling_rights),
+                SQUARES[eps].name.lower() if eps is not None else "-",
+                self.half_move_clock,
+                self.full_move_clock,
+            )
         )
-        return f"{c} {ep or '-'} {cr} {hmc} {fmc}"

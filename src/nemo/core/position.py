@@ -1,4 +1,5 @@
 from collections import defaultdict
+import io
 
 from .constants import STARTING_FEN
 from .piece import Piece
@@ -6,6 +7,7 @@ from .types import (
     Bitboard,
     Color,
     PieceType,
+    INV_PIECE_TYPE_MAP,
     PIECE_REGISTRY,
     PROMOTABLE,
     Square,
@@ -15,6 +17,7 @@ from .types import (
 from .stacked_bitboard import StackedBitboard
 from .move import Move
 from .move_gen import relative_rook_squares, square_above, square_below
+from .zobrist import ZOBRIST_KEYS, ZOBRIST_CASTLE, ZOBRIST_EP, ZOBRIST_TURN
 
 
 class Position:
@@ -22,6 +25,8 @@ class Position:
         self.clear()
         if fen is not None:
             self.from_fen(fen)
+
+        self.key = hash(self.__boards)  # only do this once; incremental update per move.
 
     def clear(self):
         self.__boards = None
@@ -81,27 +86,30 @@ class Position:
         return self.boards.king_in_check(self.state.turn)
 
     def is_checkmate(self):
-        c = self.state.turn
-        if self.boards.king_in_check(c):
-            king = self.boards.get_king(c)
-            # TODO:
-            # Check for ways to capture the attacker
-            #   - Double check can't be captured.
-            # Check for ways to block the attack set
-            #   - Double check can't be blocked.
-            # Check for legal moves for king
-            #   move set & opponent attack set
+        # c = self.state.turn
+        # if self.boards.king_in_check(c):
+        #     king = self.boards.get_king(c)
+        #     # TODO:
+        #     # Check for ways to capture the attacker
+        #     #   - Double check can't be captured.
+        #     # Check for ways to block the attack set
+        #     #   - Double check can't be blocked.
+        #     # Check for legal moves for king
+        #     #   move set & opponent attack set
+        return False
 
     def make_move(self, move: Move) -> None:
         _from, _to = move
         color = self.state.turn
         captured = None
+        new_ep_square = None
         piece = self.boards.piece_at(_from)
         # assert piece is not None
         if move.is_enpassant_capture:
             self.boards.remove_piece(_from)
             self.boards.place_piece(_to, piece)
             captured = self.boards.remove_piece(square_below(color, _to))
+            new_ep_square = square_below(color, move.ep_square_premask)
         elif move.is_double_pawn_push:
             self.boards.remove_piece(_from)
             self.boards.place_piece(_to, piece)
@@ -130,21 +138,41 @@ class Position:
             b = int(relative_rook_squares(color, short=False)[0] == _from) + 1
             castling_rights_mask = b << (2 * color)
 
-        new_ep_square = square_below(color, move.ep_square_premask)
-        self.boards.set_enpassant_board(color, new_ep_square)
+        pidx = getattr(piece, "zobrist_index", 12)
+        cidx = getattr(captured, "zobrist_index", 12)
         self.state.push(
             castling=castling_rights_mask,
             captured=captured,
             ep_square=new_ep_square,
         )
+        self.boards.set_enpassant_board(color, new_ep_square)
+        self.key ^= (
+            ZOBRIST_KEYS[pidx][_from]
+            ^ ZOBRIST_KEYS[pidx][_to]
+            ^ ZOBRIST_KEYS[cidx][_to]
+            ^ ZOBRIST_CASTLE[self.state.castling_rights]
+            ^ (0 if new_ep_square is None else ZOBRIST_EP[new_ep_square % 8])
+            ^ (ZOBRIST_TURN ^ color)
+        )
 
     def unmake_move(self, _move: Move) -> None:
         move = ~_move
         _from, _to = move
-        castling, captured, ep_square = self.state.pop()
+        _, captured, _ = self.state.pop()
+        castling, _, ep_square = self.state.top()
         color = self.state.turn
         piece = self.boards.piece_at(_from)
 
+        pidx = getattr(piece, "zobrist_index", 12)
+        cidx = getattr(captured, "zobrist_index", 12)
+        self.key ^= (
+            ZOBRIST_KEYS[pidx][_from]
+            ^ ZOBRIST_KEYS[pidx][_to]
+            ^ ZOBRIST_KEYS[cidx][_from]
+            ^ ZOBRIST_CASTLE[castling]
+            ^ (0 if ep_square is None else ZOBRIST_EP[ep_square % 8])
+            ^ (ZOBRIST_TURN ^ color)
+        )
         self.boards.set_enpassant_board(color, ep_square)
         # assert piece is not None
         if move.is_enpassant_capture:
@@ -162,7 +190,7 @@ class Position:
             if captured:
                 self.boards.place_piece(_from, captured)
         elif move.is_capture:
-            # assert captured is not None
+            assert captured is not None
             self.boards.remove_piece(_from)
             self.boards.place_piece(_to, piece)
             self.boards.place_piece(_from, captured)
@@ -194,6 +222,35 @@ class Position:
     def boards(self):
         return self.__boards
 
+    @property
+    def fen(self):
+        squares = iter(self.squares)
+        rows = []
+        for _ in range(8):
+            rows.append([next(squares) for _ in range(8)])
+        rows = rows[::-1]
+        with io.StringIO() as s:
+            for row in rows:
+                empty = 0
+                for p in row:
+                    if p is not None:
+                        if empty > 0:
+                            s.write(str(empty))
+                            empty = 0
+                        c = p.color
+                        w = INV_PIECE_TYPE_MAP[p._type]
+                        s.write(w.upper() if c == Color.WHITE else w.lower())
+                    else:
+                        empty += 1
+                if empty > 0:
+                    s.write(str(empty))
+                s.write("/")
+            # Move one position back to overwrite last '/'
+            s.seek(s.tell() - 1)
+            # If you do not have the additional information choose what to put
+            s.write(f" {self.state.fen_suffix}")
+            return s.getvalue()
+
     def __str__(self):
         div = "┼" + "───┼" * 8
         rows = [div]
@@ -205,7 +262,10 @@ class Position:
                 row.append(p or " ")
             rows.append("│ " + f" │ ".join(str(p) for p in row) + " │")
             rows.append(div)
-        return "\n".join(rows[::-1])
+        return "\n".join(rows[::-1] + [self.fen])
+
+    def __hash__(self) -> int:
+        return self.key
 
 
 def test_pawns():

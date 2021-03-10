@@ -41,10 +41,15 @@ from .types import (
 )
 from .stacked_bitboard import StackedBitboard
 from .utils import iter_bitscan_forward, iter_lsb, lsb
+from .zobrist import ZOBRIST_KEYS
 
 
 class Piece(AbstractPiece):
     _type = "Piece"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.zobrist_index = self._type + (6 * self.color) - 1
 
     def captures(self, bitboards: StackedBitboard, state: State) -> List[Move]:
         return [*self._captures(self.color, bitboards.board_for(self), bitboards, state)]
@@ -70,6 +75,10 @@ class Piece(AbstractPiece):
 
 class Enpassant(Piece):
     _type = PieceType.ENPASSANT
+
+    @staticmethod
+    def _attack_set_empty(*args, **kwargs):
+        return Bitboard(0)
 
     def captures(self, *args):
         return []
