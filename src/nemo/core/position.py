@@ -102,34 +102,29 @@ class Position:
         _from, _to = move
         color = self.state.turn
         captured = None
-        new_ep_square = None
+        ep_square = None
         piece = self.boards.piece_at(_from)
         # assert piece is not None
         if move.is_enpassant_capture:
-            self.boards.remove_piece(_from)
-            self.boards.place_piece(_to, piece)
+            self.boards.move_piece(_from, _to, piece)
             captured = self.boards.remove_piece(square_below(color, _to))
-            new_ep_square = square_below(color, move.ep_square_premask)
+            self.boards.toggle_enpassant_board(~color)
         elif move.is_double_pawn_push:
-            self.boards.remove_piece(_from)
-            self.boards.place_piece(_to, piece)
+            self.boards.move_piece(_from, _to, piece)
+            ep_square = square_below(color, _to)
         elif move.is_promotion:
             promotion_piece = PIECE_REGISTRY[move.promotion_piece_type](color)
             self.boards.remove_piece(_from)
             captured = self.boards.place_piece(_to, promotion_piece)
         elif move.is_capture:
-            self.boards.remove_piece(_from)
-            captured = self.boards.place_piece(_to, piece)
+            captured = self.boards.move_piece(_from, _to, piece)
         elif move.is_castle_kingside or move.is_castle_queenside:
             king = piece
             r_from, r_to = relative_rook_squares(color, short=move.is_castle_kingside)
-            self.boards.remove_piece(_from)  # remove king
-            rook = self.boards.remove_piece(r_from)  # remove appropriate rook
-            self.boards.place_piece(_to, king)  # place king
-            self.boards.place_piece(r_to, rook)  # place rook
+            self.boards.move_piece(_from, _to, king)
+            self.boards.move_piece(r_from, r_to, self.boards.piece_at(r_from))
         else:
-            self.boards.remove_piece(_from)
-            self.boards.place_piece(_to, piece)
+            self.boards.move_piece(_from, _to, piece)
 
         castling_rights_mask = 0
         if piece._type == PieceType.KING:
@@ -138,28 +133,28 @@ class Position:
             b = int(relative_rook_squares(color, short=False)[0] == _from) + 1
             castling_rights_mask = b << (2 * color)
 
+        self.boards.toggle_enpassant_board(color, ep_square)
         pidx = getattr(piece, "zobrist_index", 12)
         cidx = getattr(captured, "zobrist_index", 12)
         self.state.push(
             castling=castling_rights_mask,
             captured=captured,
-            ep_square=new_ep_square,
+            ep_square=ep_square,
         )
-        self.boards.set_enpassant_board(color, new_ep_square)
         self.key ^= (
             ZOBRIST_KEYS[pidx][_from]
             ^ ZOBRIST_KEYS[pidx][_to]
             ^ ZOBRIST_KEYS[cidx][_to]
             ^ ZOBRIST_CASTLE[self.state.castling_rights]
-            ^ (0 if new_ep_square is None else ZOBRIST_EP[new_ep_square % 8])
+            ^ (0 if ep_square is None else ZOBRIST_EP[ep_square % 8])
             ^ (ZOBRIST_TURN ^ color)
         )
 
     def unmake_move(self, _move: Move) -> None:
         move = ~_move
         _from, _to = move
-        _, captured, _ = self.state.pop()
-        castling, _, ep_square = self.state.top()
+        castling, captured, ep_square = self.state.pop()
+        # castling, _, _ = self.state.top()
         color = self.state.turn
         piece = self.boards.piece_at(_from)
 
@@ -173,38 +168,28 @@ class Position:
             ^ (0 if ep_square is None else ZOBRIST_EP[ep_square % 8])
             ^ (ZOBRIST_TURN ^ color)
         )
-        self.boards.set_enpassant_board(color, ep_square)
-        # assert piece is not None
         if move.is_enpassant_capture:
-            self.boards.remove_piece(_from)
-            self.boards.place_piece(_to, piece)
+            self.boards.move_piece(_from, _to, piece)
+            self.boards.toggle_enpassant_board(~color, Square(_from))
             self.boards.place_piece(square_below(color, _from), captured)
         elif move.is_double_pawn_push:
-            self.boards.remove_piece(_from)
-            self.boards.place_piece(_to, piece)
+            self.boards.move_piece(_from, _to, piece)
+            self.boards.toggle_enpassant_board(color)
         elif move.is_promotion:
             pawn = PIECE_REGISTRY["p"](self.state.turn)
             promoted = self.boards.remove_piece(_from)  # remove the promoted piece
-            assert promoted._type in PROMOTABLE
             self.boards.place_piece(_to, pawn)
             if captured:
                 self.boards.place_piece(_from, captured)
         elif move.is_capture:
-            assert captured is not None
-            self.boards.remove_piece(_from)
-            self.boards.place_piece(_to, piece)
-            self.boards.place_piece(_from, captured)
+            self.boards.move_piece(_from, _to, piece, drop=captured)
         elif move.is_castle_kingside or move.is_castle_queenside:
             king = piece
             r_to, r_from = relative_rook_squares(color, short=move.is_castle_kingside)
-            self.boards.remove_piece(_from)  # remove king
-            rook = self.boards.remove_piece(r_from)  # remove appropriate rook
-            self.boards.place_piece(_to, king)  # place king
-            self.boards.place_piece(r_to, rook)  # place rook
+            self.boards.move_piece(_from, _to, king)
+            self.boards.move_piece(r_from, r_to, self.boards.piece_at(r_from))
         else:
-            # assert move.is_quiet
-            self.boards.remove_piece(_from)
-            self.boards.place_piece(_to, piece)
+            self.boards.move_piece(_from, _to, piece)
 
     @property
     def state(self):

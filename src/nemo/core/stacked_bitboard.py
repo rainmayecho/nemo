@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Callable, Dict, List, Generator, Tuple
+from typing import Callable, Dict, List, Generator, Tuple, Optional
 
 from .types import (
     AbstractPiece as Piece,
@@ -126,6 +126,36 @@ class StackedBitboard:
         s = bitscan_forward(self.__boards[c][PieceType.KING])
         return self.__square_occupancy[s]
 
+
+    def move_piece(self, _from: int, _to: int, p: Piece, drop: Piece = None) -> Optional[Piece]:
+        _from, _to = Square(_from), Square(_to)
+        _from_bb = _from.bitboard
+        _to_bb = _to.bitboard
+        _from_to_bb = _from_bb | _to_bb
+        captured = self.piece_at(_to)
+        c = p.color
+
+        if captured is not None:   # need to toggle the square on the piece bb
+            _type = captured._type
+            self.__boards[~c][_type] ^= _to_bb
+            self.__color_occupancy[~c] ^= _to_bb
+            self.__attack_sets[~c][_type] = self.test_piece(~c, _type).attack_set_empty(self)
+
+        if drop is not None:
+            _type = drop._type
+            self.__boards[~c][_type] ^= _from_bb
+            self.__color_occupancy[~c] ^= _from_bb
+            self.__attack_sets[~c][_type] = self.test_piece(~c, _type).attack_set_empty(self)
+
+        self.__boards[c][p._type] ^= _from_to_bb
+        self.__color_occupancy[c] ^= _from_to_bb
+        self.__attack_sets[c][p._type] = self.test_piece(c, p._type).attack_set_empty(self)
+
+        self.squares[_to] = p
+        self.squares[_from] = drop
+        return captured
+
+
     def place_piece(self, s: Square, p: Piece) -> None:
         if not isinstance(s, Square):
             s = Square(s)
@@ -133,7 +163,6 @@ class StackedBitboard:
         placing_piece_bb = self.board_for(p)
         c = p.color
         s_bb = s.bitboard
-
         if existing_piece_at_s is not None:
             _type = existing_piece_at_s._type
             self.__boards[~c][_type] ^= s_bb
@@ -161,7 +190,7 @@ class StackedBitboard:
         self.squares[s] = None
         return existing_piece_at_s
 
-    def set_enpassant_board(self, c: Color, s: Square) -> None:
+    def toggle_enpassant_board(self, c: Color, s: Square = None) -> None:
         bb = s.bitboard if s is not None else EMPTY
         self.__boards[c][PieceType.ENPASSANT] = bb
 
