@@ -15,7 +15,7 @@ from .types import (
     PIECE_REGISTRY,
 )
 from .utils import (
-    iter_bitscan_forward, 
+    iter_bitscan_forward,
     bitscan_forward
 )
 
@@ -74,11 +74,11 @@ class StackedBitboard:
             for piece_type in  {PieceType.BISHOP, PieceType.ROOK}:
                 for square in iter_bitscan_forward(self.__boards[~c][piece_type]):
                     pin_sets[c] |= self.__test_pin_set(c, piece_type, king_bb, king_square, square)
-                
+
                 # Queen
                 for square in iter_bitscan_forward(self.__boards[~c][PieceType.QUEEN]):
                     pin_sets[c] |= self.__test_pin_set(c, piece_type, king_bb, king_square, square)
-                    
+
         self.__pin_sets = pin_sets
 
     def __test_pin_set(
@@ -107,7 +107,7 @@ class StackedBitboard:
         for piece_bb in self.__attack_sets[c].values():
             attack_bb |= piece_bb
         return attack_bb
-    
+
     def checkers(self, c: Color) -> Bitboard:
         """Bitboard representing pieces that can check the King of color `c`"""
         checkers_bb = EMPTY
@@ -200,6 +200,9 @@ class StackedBitboard:
 
         self.squares[_to] = p
         self.squares[_from] = drop
+
+        # recalculate pinned pieces
+        self.__compute_pin_set()
         return captured
 
 
@@ -221,6 +224,9 @@ class StackedBitboard:
         self.__attack_sets[c][p._type] = self.test_piece(c, p._type).attack_set_empty(self)
 
         self.squares[s] = p
+
+        # recalculate pinned pieces
+        self.__compute_pin_set()
         return existing_piece_at_s
 
     def remove_piece(self, s: Square) -> None:
@@ -235,6 +241,9 @@ class StackedBitboard:
             self.__color_occupancy[c] ^= s_bb
             self.__attack_sets[c][_type] = self.test_piece(c, _type).attack_set_empty(self)
         self.squares[s] = None
+
+        # recalculate pinned pieces
+        self.__compute_pin_set()
         return existing_piece_at_s
 
     def toggle_enpassant_board(self, c: Color, s: Square = None) -> None:
