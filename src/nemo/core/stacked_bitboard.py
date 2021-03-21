@@ -8,12 +8,17 @@ from .types import (
     PieceType,
     Square,
     ATTACKERS,
+    SLIDERS,
     CAN_CHECK,
     MOVABLE,
     EMPTY,
     PIECE_REGISTRY,
 )
-from .utils import iter_bitscan_forward
+from .utils import (
+    iter_bitscan_forward, 
+    bitscan_forward
+)
+
 from .zobrist import ZOBRIST_KEYS
 
 DEFAULT_FACTORY = lambda c, p: PIECE_REGISTRY[p](c)
@@ -41,26 +46,68 @@ class StackedBitboard:
         ]
         self.__square_occupancy = square_occupancy
         self.__attack_sets = None
-        self.__color_attack_sets = None
         self.__initialize_attack_sets()
+
+        # create pinned pieces bitboard for both colors
+        self.__pin_sets = None
+        self.__initialize_pin_sets()
 
     @classmethod
     def test_piece(cls, c: Color, piece_type: PieceType) -> Piece:
         return cls.__piece_cache[(c, piece_type)]
 
-    def __initialize_attack_sets(self) -> Dict[Color, Dict[PieceType, Bitboard]]:
+    def __initialize_attack_sets(self) -> None:
         attack_sets = {Color.WHITE: {}, Color.BLACK: {}}
         for c in self.__boards:
             for piece_type in ATTACKERS:
                 attack_sets[c][piece_type] = self.test_piece(c, piece_type).attack_set_empty(self)
         self.__attack_sets = attack_sets
 
+    def __initialize_pin_sets(self) -> None:
+        self.__compute_pin_set()
+
+    def __compute_pin_set(self) -> None:
+        pin_sets = {Color.WHITE: Bitboard(0), Color.BLACK: Bitboard(0)}
+        for c in self.__boards:
+            king_bb =  self.king_bb(c)
+            king_square = bitscan_forward(king_bb)
+            for piece_type in  {PieceType.BISHOP, PieceType.ROOK}:
+                for square in iter_bitscan_forward(self.__boards[~c][piece_type]):
+                    pin_sets[c] |= self.__test_pin_set(c, piece_type, king_bb, king_square, square)
+                
+                # Queen
+                for square in iter_bitscan_forward(self.__boards[~c][PieceType.QUEEN]):
+                    pin_sets[c] |= self.__test_pin_set(c, piece_type, king_bb, king_square, square)
+                    
+        self.__pin_sets = pin_sets
+
+    def __test_pin_set(
+        self, c: Color, piece_type: PieceType, king_bb: Bitboard, king_square: Square, piece_square: Square
+    ):
+        # check king contact
+        piece = self.test_piece(~c, piece_type)
+        king_contact_bb = piece.__class__._attack_lookup(piece_square, self.by_color(~c)) & king_bb
+
+        # replace king as enemy piece
+        king_attack_set_bb = piece.__class__._attack_lookup(king_square, self.occupancy) & self.by_color(c)
+
+        # attackset of current piece
+        piece_attack_set_bb = piece.__class__._attack_lookup(piece_square, self.occupancy) & self.by_color(c)
+
+        if king_contact_bb:
+            return (king_attack_set_bb & piece_attack_set_bb)
+
+        return 0
+
+    def pinned_bb(self, c: Color) -> Bitboard:
+        return self.__pin_sets[c]
+
     def attacks_by_color(self, c: Color) -> Bitboard:
         attack_bb = EMPTY
         for piece_bb in self.__attack_sets[c].values():
             attack_bb |= piece_bb
         return attack_bb
-
+    
     def checkers(self, c: Color) -> Bitboard:
         """Bitboard representing pieces that can check the King of color `c`"""
         checkers_bb = EMPTY
@@ -100,7 +147,7 @@ class StackedBitboard:
 
     @property
     def occupancy(self) -> Bitboard:
-        return self.__white_occupancy() | self.__black_occupancy()
+        return self.by_color(Color.WHITE) | self.by_color(Color.BLACK)
 
     @property
     def squares(self) -> List[Piece]:
@@ -122,7 +169,7 @@ class StackedBitboard:
     def king_bb(self, c: Color) -> Bitboard:
         return self.__boards[c][PieceType.KING]
 
-    def get_king(self, c: Color) -> Bitboard:
+    def get_king(self, c: Color) -> Piece:
         s = bitscan_forward(self.__boards[c][PieceType.KING])
         return self.__square_occupancy[s]
 
