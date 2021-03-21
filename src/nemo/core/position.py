@@ -102,6 +102,7 @@ class Position:
         _from, _to = move
         color = self.state.turn
         captured = None
+        promotion_piece = None
         ep_square = None
         piece = self.boards.piece_at(_from)
         # assert piece is not None
@@ -136,18 +137,14 @@ class Position:
         self.boards.toggle_enpassant_board(color, ep_square)
         pidx = getattr(piece, "zobrist_index", 12)
         cidx = getattr(captured, "zobrist_index", 12)
+        ppidx = getattr(promotion_piece, "zobrist_index", pidx)
         self.state.push(
             castling=castling_rights_mask,
             captured=captured,
             ep_square=ep_square,
         )
-        self.key ^= (
-            ZOBRIST_KEYS[pidx][_from]
-            ^ ZOBRIST_KEYS[pidx][_to]
-            ^ ZOBRIST_KEYS[cidx][_to]
-            ^ ZOBRIST_CASTLE[self.state.castling_rights]
-            ^ (0 if ep_square is None else ZOBRIST_EP[ep_square % 8])
-            ^ (ZOBRIST_TURN ^ color)
+        self.key ^= self.zk_xor(
+            _from, _to, pidx, cidx, ppidx, self.state.castling_rights, ep_square
         )
 
     def unmake_move(self, _move: Move) -> None:
@@ -160,14 +157,8 @@ class Position:
 
         pidx = getattr(piece, "zobrist_index", 12)
         cidx = getattr(captured, "zobrist_index", 12)
-        self.key ^= (
-            ZOBRIST_KEYS[pidx][_from]
-            ^ ZOBRIST_KEYS[pidx][_to]
-            ^ ZOBRIST_KEYS[cidx][_from]
-            ^ ZOBRIST_CASTLE[castling]
-            ^ (0 if ep_square is None else ZOBRIST_EP[ep_square % 8])
-            ^ (ZOBRIST_TURN ^ color)
-        )
+        ppidx = pidx  #  placeholder in-case of undoing promotion piece
+
         if move.is_enpassant_capture:
             self.boards.move_piece(_from, _to, piece)
             self.boards.toggle_enpassant_board(~color, Square(_from))
@@ -176,7 +167,8 @@ class Position:
             self.boards.move_piece(_from, _to, piece)
             self.boards.toggle_enpassant_board(color)
         elif move.is_promotion:
-            pawn = PIECE_REGISTRY["p"](self.state.turn)
+            pawn = PIECE_REGISTRY["p"](color)
+            ppidx = getattr(pawn, "zobrist_index", 12)
             promoted = self.boards.remove_piece(_from)  # remove the promoted piece
             self.boards.place_piece(_to, pawn)
             if captured:
@@ -190,6 +182,30 @@ class Position:
             self.boards.move_piece(r_from, r_to, self.boards.piece_at(r_from))
         else:
             self.boards.move_piece(_from, _to, piece)
+
+        self.key ^= self.undo_zk_xor(_from, _to, pidx, cidx, ppidx, castling, ep_square)
+
+    @staticmethod
+    def zk_xor(_from, _to, pidx, cidx, ppidx, castling, ep_square, debug=True):
+        return (
+            ZOBRIST_KEYS[pidx][_from]
+            ^ ZOBRIST_KEYS[cidx][_to]
+            ^ ZOBRIST_KEYS[ppidx][_to]
+            ^ ZOBRIST_CASTLE[castling]
+            ^ (0 if ep_square is None else ZOBRIST_EP[ep_square % 8])
+            ^ ZOBRIST_TURN
+        )
+
+    @staticmethod
+    def undo_zk_xor(_from, _to, pidx, cidx, ppidx, castling, ep_square, debug=True):
+        return (
+            ZOBRIST_KEYS[pidx][_from]
+            ^ ZOBRIST_KEYS[cidx][_from]
+            ^ ZOBRIST_KEYS[ppidx][_to]
+            ^ ZOBRIST_CASTLE[castling]
+            ^ (0 if ep_square is None else ZOBRIST_EP[ep_square % 8])
+            ^ ZOBRIST_TURN
+        )
 
     @property
     def state(self):

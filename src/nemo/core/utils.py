@@ -1,4 +1,5 @@
 from cProfile import Profile
+from itertools import chain
 
 from .constants import MAX_INT
 
@@ -203,3 +204,7 @@ class SectionProfiler:
 
     def __exit__(self, *args):
         self.profiler.print_stats(sort=self.__sort_by)
+
+
+def flatten(l: list) -> list:
+    return [*chain.from_iterable(l)]

@@ -212,8 +212,8 @@ class StackedBitboard:
             yield piece_type, self.__boards[c][piece_type], self.__boards[~c][piece_type]
 
     def iter_attacks(self, c: Color) -> Generator[Tuple[PieceType, Bitboard, Bitboard], None, None]:
-        for piece_type in PieceType:
-            yield piece_type, self.__boards[c][piece_type], self.__boards[~c][piece_type]
+        for piece_type in MOVABLE:
+            yield piece_type, self.__attack_sets[c][piece_type], self.__attack_sets[~c][piece_type]
 
     def __hash__(self) -> int:
         h = 0

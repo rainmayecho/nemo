@@ -46,5 +46,5 @@ def perft(depth: int = 1, fen=STARTING_FEN, position=None, move=None) -> NodeSta
         if position.is_legal():
             n += perft(depth - 1, position=position, move=move)
         position.unmake_move(move)
-        # assert zk_before == position.key
+        _ = 1
     return n

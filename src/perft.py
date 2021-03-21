@@ -9,7 +9,7 @@ if __name__ == "__main__":
         # depth = input("Depth: ")
         fen = input("FEN:") or STARTING_FEN
         # with SectionProfiler():
-        for depth in range(1, 6):
+        for depth in range(1, 7):
             n = perft(int(depth), fen=fen)
             print(f"depth={depth} fen={fen}:\n{n}")
         print("\n")
