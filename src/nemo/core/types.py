@@ -257,6 +257,11 @@ ATTACKERS = {
     PieceType.PAWN,
     PieceType.KING,
 }
+SLIDERS = {
+    PieceType.BISHOP,
+    PieceType.ROOK,
+    PieceType.QUEEN
+}
 
 PIECE_REGISTRY = {}
 
