@@ -148,6 +148,6 @@ def evaluate(position: "Position") -> float:
     c = position.state.turn
     boards = position.boards
     return sum(
-        H(c, boards) * w * cf
+        H(c, boards) * w
         for H, w in HEURISTICS
     )
