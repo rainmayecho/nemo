@@ -40,7 +40,7 @@ from .types import (
     Square,
 )
 from .stacked_bitboard import StackedBitboard
-from .utils import iter_bitscan_forward, iter_lsb, lsb
+from .utils import bitscan_forward, file_mask, iter_bitscan_forward, iter_lsb, lsb
 from .zobrist import ZOBRIST_KEYS
 
 
@@ -61,7 +61,7 @@ class Piece(AbstractPiece):
         return [*self.captures(bitboards, state), *self.quiet_moves(bitboards, state)]
 
     def legal_moves(self, bitboards: StackedBitboard, state: State) -> List[Move]:
-        return []
+        return [*self.captures(bitboards, state), *self.quiet_moves(bitboards, state)]
 
     def attack_set_empty(self, bitboards: StackedBitboard, *args) -> Bitboard:
         return self._attack_set_empty(self.color, bitboards.board_for(self), bitboards, *args)
@@ -71,6 +71,15 @@ class Piece(AbstractPiece):
 
     def attack_set_on(self, bitboards: StackedBitboard, s: Square) -> Bitboard:
         return self._attack_set(self.color, bitboards.board_for(self), bitboards, Bitboard(1 << s))
+
+    @staticmethod
+    def get_pin_mask(c: Color, _from: Square, bitboards: StackedBitboard) -> Bitboard:
+        king_sq = bitscan_forward(bitboards.king_bb(c))
+        return (
+            Magic.get_pin_mask(king_sq, _from)
+            if Square(_from).bitboard & bitboards.pinned_bb(c)
+            else UNIVERSE
+        )
 
 
 class Enpassant(Piece):
@@ -109,24 +118,27 @@ class Pawn(Piece):
     ) -> Generator[Move, None, None]:
         other_ep_board = bitboards.ep_board(~c)
         other_occupancy = bitboards.by_color(~c) | other_ep_board
+        king_sq = bitscan_forward(bitboards.king_bb(c))
         for pawn_bb in iter_lsb(pawns):
             _from = next(iter_bitscan_forward(pawn_bb))
+            pin_mask = Piece.get_pin_mask(c, _from, bitboards)
             attack_set = PAWN_ATTACKS[c](pawn_bb) & other_occupancy
             promotion_attack_set = attack_set & relative_eigth_rank_bb(c)
             enpassant_attack_set = attack_set & other_ep_board
             attack_set &= ~promotion_attack_set
             attack_set &= ~enpassant_attack_set
 
-            for _to in iter_bitscan_forward(promotion_attack_set):
+            for _to in iter_bitscan_forward(promotion_attack_set & pin_mask):
+
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.PROMOTION_Q_CAPTURE)
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.PROMOTION_N_CAPTURE)
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.PROMOTION_R_CAPTURE)
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.PROMOTION_B_CAPTURE)
 
-            for _to in iter_bitscan_forward(enpassant_attack_set):
+            for _to in iter_bitscan_forward(enpassant_attack_set & pin_mask):
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.ENPASSANT_CAPTURE)
 
-            for _to in iter_bitscan_forward(attack_set):
+            for _to in iter_bitscan_forward(attack_set & pin_mask):
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.CAPTURES)
 
     @staticmethod
@@ -136,11 +148,14 @@ class Pawn(Piece):
         occupancy, other_occupancy = bitboards.by_color(c), bitboards.by_color(~c)
 
         occupied_bb = occupancy | other_occupancy
-        unmoved_pawns = pawns & relative_second_rank_bb(c)
         empty = ~occupied_bb
-        single_push_candidates = relative_south(c, empty) & pawns
+
+        king_sq = bitscan_forward(bitboards.king_bb(c))
+        pawns_not_pinned = pawns & ~(pawns & bitboards.pinned_bb(c) & ~(file_mask(king_sq)))
+
+        single_push_candidates = relative_south(c, empty) & pawns_not_pinned
         empty_r3 = relative_south(c, empty & relative_fourth_rank_bb(c)) & empty
-        double_push_candidates = relative_south(c, empty_r3) & pawns
+        double_push_candidates = relative_south(c, empty_r3) & pawns_not_pinned
 
         single_pawn_pushes = PAWN_SINGLE_PUSHES[c](single_push_candidates)
         double_pawn_pushes = PAWN_DOUBLE_PUSHES[c](double_push_candidates)
@@ -150,7 +165,6 @@ class Pawn(Piece):
         SINGLE_PUSH_DIR = NORTH if c == Color.WHITE else SOUTH
         DOUBLE_PUSH_DIR = SINGLE_PUSH_DIR * 2
 
-        moves = []
         for _to in iter_bitscan_forward(promotions):
             _from = _to - SINGLE_PUSH_DIR
             yield Move(_from=_from, _to=_to, flags=MoveFlags.PROMOTION_N)
@@ -163,8 +177,6 @@ class Pawn(Piece):
 
         for _to in iter_bitscan_forward(single_pawn_pushes):
             yield Move(_from=_to - SINGLE_PUSH_DIR, _to=_to, flags=MoveFlags.QUIET)
-
-        return moves
 
 
 class Knight(Piece):
@@ -192,6 +204,8 @@ class Knight(Piece):
     ) -> Generator[Move, None, None]:
         other_occupancy = bitboards.by_color(~c)
         for _from in iter_bitscan_forward(knights):
+            if Square(_from).bitboard & bitboards.pinned_bb(c):
+                continue
             attack_set = KNIGHT_ATTACKS[_from] & other_occupancy
             for _to in iter_bitscan_forward(attack_set):
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.CAPTURES)
@@ -203,6 +217,8 @@ class Knight(Piece):
         other_occupancy = bitboards.by_color(~c)
         unoccupied = ~(bitboards.by_color(c) | other_occupancy)
         for _from in iter_bitscan_forward(knights):
+            if Square(_from).bitboard & bitboards.pinned_bb(c):
+                continue
             jump_set = KNIGHT_ATTACKS[_from] & unoccupied
             for _to in iter_bitscan_forward(jump_set):
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.QUIET)
@@ -243,8 +259,9 @@ class King(Piece):
     ) -> Generator[Move, None, None]:
         other_occupancy = bitboards.by_color(~c)
         unoccupied = ~(bitboards.by_color(c) | other_occupancy)
+        unattacked = ~(bitboards.attacks_by_color(~c))
         for _from in iter_bitscan_forward(king_bb):
-            move_set = KING_ATTACKS[_from] & unoccupied
+            move_set = KING_ATTACKS[_from] & unoccupied & unattacked
             for _to in iter_bitscan_forward(move_set):
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.QUIET)
 
@@ -252,7 +269,6 @@ class King(Piece):
         if castling_rights and ((1 << _from) & Files.E):
             krsq = relative_rook_squares(c, short=True)[0]
             qrsq = relative_rook_squares(c, short=False)[0]
-            unattacked = ~(bitboards.attacks_by_color(~c))
 
             ks_mask = 6 << (krsq - 3)
             qs_mask = 7 << (qrsq + 1)
@@ -316,7 +332,8 @@ class SlidingPiece(Piece):
         other_occupancy = bitboards.by_color(~c)
         blockers = bitboards.by_color(c) | other_occupancy
         for _from in iter_bitscan_forward(piece_bb):
-            attack_set = cls._attack_lookup(_from, blockers) & other_occupancy
+            pin_mask = Piece.get_pin_mask(c, _from, bitboards)
+            attack_set = cls._attack_lookup(_from, blockers) & other_occupancy & pin_mask
             for _to in iter_bitscan_forward(attack_set):
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.CAPTURES)
 
@@ -327,7 +344,8 @@ class SlidingPiece(Piece):
         other_occupancy = bitboards.by_color(~c)
         blockers = bitboards.by_color(c) | other_occupancy
         for _from in iter_bitscan_forward(piece_bb):
-            attack_set = cls._attack_lookup(_from, blockers) & ~blockers
+            pin_mask = Piece.get_pin_mask(c, _from, bitboards)
+            attack_set = cls._attack_lookup(_from, blockers) & ~blockers & pin_mask
             for _to in iter_bitscan_forward(attack_set):
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.QUIET)
 

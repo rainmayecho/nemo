@@ -16,7 +16,14 @@ from .types import (
 )
 from .stacked_bitboard import StackedBitboard
 from .move import Move
-from .move_gen import relative_rook_squares, square_above, square_below
+from .move_gen import (
+    e_one,
+    w_one,
+    relative_fourth_rank_bb,
+    relative_rook_squares,
+    square_above,
+    square_below,
+)
 from .zobrist import ZOBRIST_KEYS, ZOBRIST_CASTLE, ZOBRIST_EP, ZOBRIST_TURN
 
 
@@ -74,9 +81,13 @@ class Position:
         )
 
     @property
+    def legal_moves(self):
+        for test_piece in self.boards.iterpieces(self.state.turn):
+            yield from iter(test_piece.legal_moves(self.bitboards, self.state))
+
+    @property
     def pseudo_legal_moves(self):
-        c = self.state.turn
-        for test_piece in self.boards.iterpieces(c):
+        for test_piece in self.boards.iterpieces(self.state.turn):
             yield from iter(test_piece.pseudo_legal_moves(self.bitboards, self.state))
 
     def is_legal(self):
@@ -111,8 +122,13 @@ class Position:
             captured = self.boards.remove_piece(square_below(color, _to))
             self.boards.toggle_enpassant_board(~color)
         elif move.is_double_pawn_push:
-            self.boards.move_piece(_from, _to, piece)
+            other_king_bb_on_fifth = self.boards.king_bb(~color) & relative_fourth_rank_bb(color)
+            _to_bb = Square(_to).bitboard
+            adj_bb = e_one(_to_bb) | w_one(_to_bb)
             ep_square = square_below(color, _to)
+            if not (other_king_bb_on_fifth and (adj_bb & self.boards.pinned_bb(~color))):
+                self.boards.toggle_enpassant_board(color, ep_square)
+            self.boards.move_piece(_from, _to, piece)
         elif move.is_promotion:
             promotion_piece = PIECE_REGISTRY[move.promotion_piece_type](color)
             self.boards.remove_piece(_from)
@@ -134,7 +150,6 @@ class Position:
             b = int(relative_rook_squares(color, short=False)[0] == _from) + 1
             castling_rights_mask = b << (2 * color)
 
-        self.boards.toggle_enpassant_board(color, ep_square)
         pidx = getattr(piece, "zobrist_index", 12)
         cidx = getattr(captured, "zobrist_index", 12)
         ppidx = getattr(promotion_piece, "zobrist_index", pidx)

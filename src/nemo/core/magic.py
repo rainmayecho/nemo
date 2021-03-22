@@ -5,7 +5,7 @@ from random import getrandbits
 from typing import Tuple, Dict, List
 
 from .utils import popcnt, lsb, rank_mask, file_mask, diag_mask, antidiag_mask, BIT_TABLE
-from .types import Bitboard, Square, Ranks, Files, Squares
+from .types import Bitboard, Square, Ranks, Files, Squares, EMPTY
 
 NOT_EDGES = ~(Ranks.RANK_8 | Ranks.RANK_1 | Files.A | Files.H)
 MAX_INT_32 = 2 ** 32 - 1
@@ -239,6 +239,23 @@ except Exception:
     regenerate_magic()
 
 
+# pin lookup
+def generate_pin_masks():
+    global PIN_MASKS
+    for i in range(64):
+        for j in range(i+1, 64):
+            __rank = rank_mask(i) & rank_mask(j)
+            __file = file_mask(i) & file_mask(j)
+            __diag = diag_mask(i) & diag_mask(j)
+            __antidiag = antidiag_mask(i) & antidiag_mask(j)
+
+            __mask = Bitboard(__rank | __file | __diag | __antidiag)
+            if __mask:
+                PIN_MASKS[(i, j)] = __mask
+                PIN_MASKS[(j, i)] = __mask
+
+generate_pin_masks()
+
 class Magic:
     @staticmethod
     def bishop_attacks(s: int, occ: Bitboard) -> Bitboard:
@@ -254,19 +271,6 @@ class Magic:
         idx = Bitboard(occ) >> (64 - ROOK_BITS[s])
         return ROOK_ATTACKS[s][idx]
 
-# pin lookup
-def generate_pin_masks():
-    global PIN_MASKS
-    for i in range(64):
-        for j in range(i+1, 64):
-            __rank = rank_mask(i) & rank_mask(j)
-            __file = file_mask(i) & file_mask(j)
-            __diag = diag_mask(i) & diag_mask(j)
-            __antidiag = antidiag_mask(i) & antidiag_mask(j)
-
-            __mask = Bitboard(__rank | __file | __diag | __antidiag)
-            if __mask:
-                PIN_MASKS[(i,j)] = __mask
-                PIN_MASKS[(j,i)] = __mask
-
-generate_pin_masks()
+    @staticmethod
+    def get_pin_mask(s1: Square, s2: Square) -> Bitboard:
+        return PIN_MASKS.get((s1, s2), EMPTY)
