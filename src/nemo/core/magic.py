@@ -12,6 +12,7 @@ MAX_INT_32 = 2 ** 32 - 1
 
 
 PIN_MASKS = {}
+RAY_MASKS = {}
 
 
 def rook_mask(s: Square) -> Bitboard:
@@ -256,8 +257,34 @@ def generate_pin_masks():
                 PIN_MASKS[(j, i)] = __mask
 
 
-generate_pin_masks()
+def generate_rays():
+    global RAY_MASKS
+    for i in range(64):
+        for j in range(i + 1, 64):
+            __mask = Bitboard(0)
+            if j // 8 == i // 8:  # +1 dir
+                d = 1
+            elif diag_mask(i) & diag_mask(j):  # +9 dir
+                d = 9
+            elif antidiag_mask(i) & antidiag_mask(j): # +7 dir
+                d = 7
+            elif i % 8 == j % 8:  # +8 dir
+                d = 8
+            else:
+                RAY_MASKS[(i, j)] = __mask
+                RAY_MASKS[(j, i)] = __mask
+                continue
+            
+            k = i + d
+            while k < j:
+                __mask |= 1 << k
+                k += d
 
+            RAY_MASKS[(i, j)] = __mask
+            RAY_MASKS[(j, i)] = __mask
+                    
+generate_pin_masks()
+generate_rays()
 
 class Magic:
     @staticmethod
@@ -277,3 +304,7 @@ class Magic:
     @staticmethod
     def get_pin_mask(s1: Square, s2: Square) -> Bitboard:
         return PIN_MASKS.get((s1, s2), EMPTY)
+
+    @staticmethod
+    def get_ray_mask(s1: Square, s2: Square) -> Bitboard:
+        return RAY_MASKS.get((s1, s2), EMPTY)

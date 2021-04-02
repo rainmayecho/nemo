@@ -104,7 +104,7 @@ class Piece(AbstractPiece):
     @staticmethod
     def get_check_mask(c: Color, checks_bb: Square, bitboards: StackedBitboard) -> Bitboard:
         king_sq = bitscan_forward(bitboards.king_bb(c))
-        return Magic.get_pin_mask(king_sq, bitscan_forward(checks_bb)) if checks_bb else UNIVERSE
+        return Magic.get_ray_mask(king_sq, bitscan_forward(checks_bb)) if checks_bb else UNIVERSE
 
 
 class Enpassant(Piece):
