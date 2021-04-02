@@ -165,8 +165,9 @@ def bitscan_forward(bb: int):
 
 
 def iter_bitscan_forward(bb: int) -> "Generator[int, None, None]":
-    for isolated_lsb in iter_lsb(bb):
-        yield BITSCAN_INDEX[_bb(isolated_lsb * DEBRUIJN_CONST) >> 58]
+    if bb:
+        for isolated_lsb in iter_lsb(bb):
+            yield BITSCAN_INDEX[_bb(isolated_lsb * DEBRUIJN_CONST) >> 58]
 
 
 def rank_mask(s: int) -> int:

@@ -51,17 +51,37 @@ class Piece(AbstractPiece):
         super().__init__(*args, **kwargs)
         self.zobrist_index = self._type + (6 * self.color) - 1
 
-    def captures(self, bitboards: StackedBitboard, state: State) -> List[Move]:
-        return [*self._captures(self.color, bitboards.board_for(self), bitboards, state)]
+    def captures(
+        self, bitboards: StackedBitboard, checks_bb: Bitboard = UNIVERSE, state: State = None
+    ) -> List[Move]:
+        return [
+            *self._captures(
+                self.color, bitboards.board_for(self), bitboards, checks_bb=checks_bb, state=state
+            )
+        ]
 
-    def quiet_moves(self, bitboards: StackedBitboard, state: State) -> List[Move]:
-        return [*self._quiet_moves(self.color, bitboards.board_for(self), bitboards, state)]
+    def quiet_moves(
+        self, bitboards: StackedBitboard, checks_bb: Bitboard = UNIVERSE, state: State = None
+    ) -> List[Move]:
+        return [
+            *self._quiet_moves(
+                self.color, bitboards.board_for(self), bitboards, checks_bb=checks_bb, state=state
+            )
+        ]
 
     def pseudo_legal_moves(self, bitboards: StackedBitboard, state: State) -> List[Move]:
         return [*self.captures(bitboards, state), *self.quiet_moves(bitboards, state)]
 
     def legal_moves(self, bitboards: StackedBitboard, state: State) -> List[Move]:
-        return [*self.captures(bitboards, state), *self.quiet_moves(bitboards, state)]
+        if bitboards.king_in_double_check(self.color):
+            return (
+                [*self.quiet_moves(bitboards, state=state)] if self._type == PieceType.KING else []
+            )
+        checks_bb = bitboards.checkers(self.color)
+        return [
+            *self.captures(bitboards, checks_bb=checks_bb, state=state),
+            *self.quiet_moves(bitboards, checks_bb=checks_bb, state=state),
+        ]
 
     def attack_set_empty(self, bitboards: StackedBitboard, *args) -> Bitboard:
         return self._attack_set_empty(self.color, bitboards.board_for(self), bitboards, *args)
@@ -80,6 +100,11 @@ class Piece(AbstractPiece):
             if Square(_from).bitboard & bitboards.pinned_bb(c)
             else UNIVERSE
         )
+
+    @staticmethod
+    def get_check_mask(c: Color, checks_bb: Square, bitboards: StackedBitboard) -> Bitboard:
+        king_sq = bitscan_forward(bitboards.king_bb(c))
+        return Magic.get_pin_mask(king_sq, bitscan_forward(checks_bb)) if checks_bb else UNIVERSE
 
 
 class Enpassant(Piece):
@@ -114,36 +139,39 @@ class Pawn(Piece):
 
     @staticmethod
     def _captures(
-        c: Color, pawns: Bitboard, bitboards: StackedBitboard, state: State
+        c: Color, pawns: Bitboard, bitboards: StackedBitboard, checks_bb: Bitboard, state: State
     ) -> Generator[Move, None, None]:
         other_ep_board = bitboards.ep_board(~c)
         other_occupancy = bitboards.by_color(~c) | other_ep_board
         king_sq = bitscan_forward(bitboards.king_bb(c))
+
+        forced_attack_set = UNIVERSE if checks_bb == EMPTY else checks_bb
+
         for pawn_bb in iter_lsb(pawns):
             _from = next(iter_bitscan_forward(pawn_bb))
             pin_mask = Piece.get_pin_mask(c, _from, bitboards)
-            attack_set = PAWN_ATTACKS[c](pawn_bb) & other_occupancy
+            attack_set = PAWN_ATTACKS[c](pawn_bb) & other_occupancy & pin_mask & forced_attack_set
             promotion_attack_set = attack_set & relative_eigth_rank_bb(c)
             enpassant_attack_set = attack_set & other_ep_board
             attack_set &= ~promotion_attack_set
             attack_set &= ~enpassant_attack_set
 
-            for _to in iter_bitscan_forward(promotion_attack_set & pin_mask):
+            for _to in iter_bitscan_forward(promotion_attack_set):
 
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.PROMOTION_Q_CAPTURE)
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.PROMOTION_N_CAPTURE)
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.PROMOTION_R_CAPTURE)
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.PROMOTION_B_CAPTURE)
 
-            for _to in iter_bitscan_forward(enpassant_attack_set & pin_mask):
+            for _to in iter_bitscan_forward(enpassant_attack_set):
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.ENPASSANT_CAPTURE)
 
-            for _to in iter_bitscan_forward(attack_set & pin_mask):
+            for _to in iter_bitscan_forward(attack_set):
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.CAPTURES)
 
     @staticmethod
     def _quiet_moves(
-        c: Color, pawns: Bitboard, bitboards: StackedBitboard, state: State
+        c: Color, pawns: Bitboard, bitboards: StackedBitboard, checks_bb: Bitboard, state: State
     ) -> Generator[Move, None, None]:
         occupancy, other_occupancy = bitboards.by_color(c), bitboards.by_color(~c)
 
@@ -165,17 +193,19 @@ class Pawn(Piece):
         SINGLE_PUSH_DIR = NORTH if c == Color.WHITE else SOUTH
         DOUBLE_PUSH_DIR = SINGLE_PUSH_DIR * 2
 
-        for _to in iter_bitscan_forward(promotions):
+        check_mask = Piece.get_check_mask(c, checks_bb, bitboards)
+
+        for _to in iter_bitscan_forward(promotions & check_mask):
             _from = _to - SINGLE_PUSH_DIR
             yield Move(_from=_from, _to=_to, flags=MoveFlags.PROMOTION_N)
             yield Move(_from=_from, _to=_to, flags=MoveFlags.PROMOTION_Q)
             yield Move(_from=_from, _to=_to, flags=MoveFlags.PROMOTION_R)
             yield Move(_from=_from, _to=_to, flags=MoveFlags.PROMOTION_B)
 
-        for _to in iter_bitscan_forward(double_pawn_pushes):
+        for _to in iter_bitscan_forward(double_pawn_pushes & check_mask):
             yield Move(_from=_to - DOUBLE_PUSH_DIR, _to=_to, flags=MoveFlags.DOUBLE_PAWN_PUSH)
 
-        for _to in iter_bitscan_forward(single_pawn_pushes):
+        for _to in iter_bitscan_forward(single_pawn_pushes & check_mask):
             yield Move(_from=_to - SINGLE_PUSH_DIR, _to=_to, flags=MoveFlags.QUIET)
 
 
@@ -200,26 +230,30 @@ class Knight(Piece):
 
     @staticmethod
     def _captures(
-        c: Color, knights: Bitboard, bitboards: StackedBitboard, state: State
+        c: Color, knights: Bitboard, bitboards: StackedBitboard, checks_bb: Bitboard, state: State
     ) -> Generator[Move, None, None]:
         other_occupancy = bitboards.by_color(~c)
+        forced_attack_set = UNIVERSE if checks_bb == EMPTY else checks_bb
+
         for _from in iter_bitscan_forward(knights):
             if Square(_from).bitboard & bitboards.pinned_bb(c):
                 continue
-            attack_set = KNIGHT_ATTACKS[_from] & other_occupancy
+            attack_set = KNIGHT_ATTACKS[_from] & other_occupancy & forced_attack_set
             for _to in iter_bitscan_forward(attack_set):
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.CAPTURES)
 
     @staticmethod
     def _quiet_moves(
-        c: Color, knights: Bitboard, bitboards: StackedBitboard, state: State
+        c: Color, knights: Bitboard, bitboards: StackedBitboard, checks_bb: Bitboard, state: State
     ) -> Generator[Move, None, None]:
         other_occupancy = bitboards.by_color(~c)
         unoccupied = ~(bitboards.by_color(c) | other_occupancy)
+        check_mask = Piece.get_check_mask(c, checks_bb, bitboards)
+
         for _from in iter_bitscan_forward(knights):
             if Square(_from).bitboard & bitboards.pinned_bb(c):
                 continue
-            jump_set = KNIGHT_ATTACKS[_from] & unoccupied
+            jump_set = KNIGHT_ATTACKS[_from] & unoccupied & check_mask
             for _to in iter_bitscan_forward(jump_set):
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.QUIET)
 
@@ -245,25 +279,29 @@ class King(Piece):
 
     @staticmethod
     def _captures(
-        c: Color, kings: Bitboard, bitboards: StackedBitboard, state: State
+        c: Color, kings: Bitboard, bitboards: StackedBitboard, checks_bb: Bitboard, state: State
     ) -> Generator[Move, None, None]:
         other_occupancy = bitboards.by_color(~c)
+        unattacked = ~(bitboards.attacks_by_color(~c))
+
+        attack_set = UNIVERSE if checks_bb == EMPTY else checks_bb
+
         for _from in iter_bitscan_forward(kings):
-            attack_set = KING_ATTACKS[_from] & other_occupancy
+            attack_set &= KING_ATTACKS[_from] & other_occupancy & unattacked
             for _to in iter_bitscan_forward(attack_set):
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.CAPTURES)
 
     @staticmethod
     def _quiet_moves(
-        c: Color, king_bb: Bitboard, bitboards: StackedBitboard, state: State
+        c: Color, king_bb: Bitboard, bitboards: StackedBitboard, checks_bb: Bitboard, state: State
     ) -> Generator[Move, None, None]:
         other_occupancy = bitboards.by_color(~c)
         unoccupied = ~(bitboards.by_color(c) | other_occupancy)
         unattacked = ~(bitboards.attacks_by_color(~c))
-        for _from in iter_bitscan_forward(king_bb):
-            move_set = KING_ATTACKS[_from] & unoccupied & unattacked
-            for _to in iter_bitscan_forward(move_set):
-                yield Move(_from=_from, _to=_to, flags=MoveFlags.QUIET)
+        _from = bitscan_forward(king_bb)
+        move_set = KING_ATTACKS[_from] & unoccupied & unattacked
+        for _to in iter_bitscan_forward(move_set):
+            yield Move(_from=_from, _to=_to, flags=MoveFlags.QUIET)
 
         castling_rights = state.castling_rights[c]
         if castling_rights and ((1 << _from) & Files.E):
@@ -327,25 +365,41 @@ class SlidingPiece(Piece):
 
     @classmethod
     def _captures(
-        cls, c: Color, piece_bb: Bitboard, bitboards: StackedBitboard, state: State
+        cls,
+        c: Color,
+        piece_bb: Bitboard,
+        bitboards: StackedBitboard,
+        checks_bb: Bitboard,
+        state: State,
     ) -> Generator[Move, None, None]:
         other_occupancy = bitboards.by_color(~c)
         blockers = bitboards.by_color(c) | other_occupancy
+
+        forced_attack_set = UNIVERSE if checks_bb == EMPTY else checks_bb
+
         for _from in iter_bitscan_forward(piece_bb):
             pin_mask = Piece.get_pin_mask(c, _from, bitboards)
-            attack_set = cls._attack_lookup(_from, blockers) & other_occupancy & pin_mask
+            attack_set = cls._attack_lookup(_from, blockers) & other_occupancy & pin_mask & forced_attack_set
             for _to in iter_bitscan_forward(attack_set):
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.CAPTURES)
 
     @classmethod
     def _quiet_moves(
-        cls, c: Color, piece_bb: Bitboard, bitboards: StackedBitboard, state: State
+        cls,
+        c: Color,
+        piece_bb: Bitboard,
+        bitboards: StackedBitboard,
+        checks_bb: Bitboard,
+        state: State,
     ) -> Generator[Move, None, None]:
         other_occupancy = bitboards.by_color(~c)
         blockers = bitboards.by_color(c) | other_occupancy
+
+        check_mask = Piece.get_check_mask(c, checks_bb, bitboards)
+
         for _from in iter_bitscan_forward(piece_bb):
             pin_mask = Piece.get_pin_mask(c, _from, bitboards)
-            attack_set = cls._attack_lookup(_from, blockers) & ~blockers & pin_mask
+            attack_set = cls._attack_lookup(_from, blockers) & ~blockers & pin_mask & check_mask
             for _to in iter_bitscan_forward(attack_set):
                 yield Move(_from=_from, _to=_to, flags=MoveFlags.QUIET)
 

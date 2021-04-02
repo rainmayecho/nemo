@@ -84,7 +84,7 @@ PIECE_SQUARE_TABLES = {
         PieceType.ROOK: CENTRAL_PREFERENCE_TABLE,
         PieceType.BISHOP: CENTRAL_PREFERENCE_TABLE,
         PieceType.QUEEN: CENTRAL_PREFERENCE_TABLE,
-    }
+    },
 }
 
 W_MAT = 1.0
@@ -109,12 +109,11 @@ def attacks(c: Color, bitboards: StackedBitboard) -> float:
     self_bb = bitboards.by_color(c)
     other_bb = bitboards.by_color(~c)
     for piece_type, self_attack_bb, other_attack_bb in bitboards.iter_attacks(c):
-        attack += (
-            popcnt(self_attack_bb & other_bb) - (
-                popcnt(other_attack_bb & self_bb) - popcnt(self_bb & self_attack_bb)
-            )
+        attack += popcnt(self_attack_bb & other_bb) - (
+            popcnt(other_attack_bb & self_bb) - popcnt(self_bb & self_attack_bb)
         )
     return attack
+
 
 def mobility(c: Color, bitboards: StackedBitboard) -> float:
     mob = 0
@@ -123,6 +122,7 @@ def mobility(c: Color, bitboards: StackedBitboard) -> float:
     for piece_type, self_attack_bb, other_attack_bb in bitboards.iter_attacks(c):
         mob += popcnt(self_attack_bb) - popcnt(other_attack_bb)
     return mob
+
 
 def placement(c: Color, bitboards: StackedBitboard) -> float:
     placement = 0
@@ -140,14 +140,11 @@ HEURISTICS = [
     (material_difference, W_MAT),
     # (attacks, W_ATT),
     (mobility, W_MOB),
-    (placement, W_PLAC)
+    (placement, W_PLAC),
 ]
 
 
 def evaluate(position: "Position") -> float:
     c = position.state.turn
     boards = position.boards
-    return sum(
-        H(c, boards) * w
-        for H, w in HEURISTICS
-    )
+    return sum(H(c, boards) * w for H, w in HEURISTICS)

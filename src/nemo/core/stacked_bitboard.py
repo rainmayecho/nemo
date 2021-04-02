@@ -7,6 +7,7 @@ from .types import (
     Color,
     PieceType,
     Square,
+    State,
     ATTACKERS,
     SLIDERS,
     CAN_CHECK,
@@ -15,13 +16,18 @@ from .types import (
     PIECE_REGISTRY,
 )
 from .utils import (
+    bitscan_forward,
     iter_bitscan_forward,
-    bitscan_forward
+    popcnt,
 )
 
 from .zobrist import ZOBRIST_KEYS
 
 DEFAULT_FACTORY = lambda c, p: PIECE_REGISTRY[p](c)
+
+
+def test_state(c: Color):
+    return State(c, "-")
 
 
 class PieceCache(dict):
@@ -52,6 +58,10 @@ class StackedBitboard:
         self.__pin_sets = None
         self.__initialize_pin_sets()
 
+        self.__check_sets = None
+        self.__checkmated = None
+        self.__initialize_check_sets()
+
     @classmethod
     def test_piece(cls, c: Color, piece_type: PieceType) -> Piece:
         return cls.__piece_cache[(c, piece_type)]
@@ -69,9 +79,9 @@ class StackedBitboard:
     def __compute_pin_set(self) -> None:
         pin_sets = {Color.WHITE: Bitboard(0), Color.BLACK: Bitboard(0)}
         for c in self.__boards:
-            king_bb =  self.king_bb(c)
+            king_bb = self.king_bb(c)
             king_square = bitscan_forward(king_bb)
-            for piece_type in  {PieceType.BISHOP, PieceType.ROOK}:
+            for piece_type in {PieceType.BISHOP, PieceType.ROOK}:
                 for square in iter_bitscan_forward(self.__boards[~c][piece_type]):
                     pin_sets[c] |= self.__test_pin_set(c, piece_type, king_bb, king_square, square)
 
@@ -82,20 +92,29 @@ class StackedBitboard:
         self.__pin_sets = pin_sets
 
     def __test_pin_set(
-        self, c: Color, piece_type: PieceType, king_bb: Bitboard, king_square: Square, piece_square: Square
+        self,
+        c: Color,
+        piece_type: PieceType,
+        king_bb: Bitboard,
+        king_square: Square,
+        piece_square: Square,
     ):
         # check king contact
         piece = self.test_piece(~c, piece_type)
         king_contact_bb = piece.__class__._attack_lookup(piece_square, self.by_color(~c)) & king_bb
 
         # replace king as enemy piece
-        king_attack_set_bb = piece.__class__._attack_lookup(king_square, self.occupancy) & self.by_color(c)
+        king_attack_set_bb = piece.__class__._attack_lookup(
+            king_square, self.occupancy
+        ) & self.by_color(c)
 
         # attackset of current piece
-        piece_attack_set_bb = piece.__class__._attack_lookup(piece_square, self.occupancy) & self.by_color(c)
+        piece_attack_set_bb = piece.__class__._attack_lookup(
+            piece_square, self.occupancy
+        ) & self.by_color(c)
 
         if king_contact_bb:
-            return (king_attack_set_bb & piece_attack_set_bb)
+            return king_attack_set_bb & piece_attack_set_bb
 
         return 0
 
@@ -108,28 +127,34 @@ class StackedBitboard:
             attack_bb |= piece_bb
         return attack_bb
 
-    def checkers(self, c: Color) -> Bitboard:
+    def __compute_checkers(self, c: Color) -> Bitboard:
         """Bitboard representing pieces that can check the King of color `c`"""
         checkers_bb = EMPTY
         king_bb = self.__boards[c][PieceType.KING]
-        for piece in self.iter_check_candidates(~c):
-            piece_bb = self.__boards[~c][piece._type]
+        for piece, piece_bb in self.iter_check_candidates(~c):
             for s in iter_bitscan_forward(piece_bb):
-                v = (piece.attack_set_on(self, s) & king_bb) and 1  # no-branch hack
-                checkers_bb |= v << s
+                if piece.attack_set_on(self, s) & king_bb:
+                    checkers_bb |= 1 << s
         return checkers_bb
 
-    def __checkers(self, c: Color) -> Bitboard:
+    def __initialize_check_sets(self) -> None:
         """Bitboard representing pieces that can check the King of color `c`"""
-        checkers_bb = EMPTY
-        king_bb = self.__boards[c][PieceType.KING]
-        for piece in self.iter_check_candidates(~c):
-            if piece.attack_set(self) & king_bb:
-                return True
-        return False
+        self.__check_sets = {
+            Color.WHITE: self.__compute_checkers(Color.WHITE),
+            Color.BLACK: self.__compute_checkers(Color.BLACK),
+        }
 
     def king_in_check(self, c: Color) -> bool:
-        return self.__checkers(c)
+        return self.__check_sets[c] != EMPTY
+
+    def king_in_double_check(self, c: Color) -> bool:
+        return popcnt(self.__check_sets[c]) == 2
+
+    def checkers(self, c: Color) -> Bitboard:
+        return self.__check_sets[c]
+
+    def is_checkmate(self):
+        return self.__checkmated is not None
 
     def __white_occupancy(self) -> Bitboard:
         occ = EMPTY
@@ -173,7 +198,6 @@ class StackedBitboard:
         s = bitscan_forward(self.__boards[c][PieceType.KING])
         return self.__square_occupancy[s]
 
-
     def move_piece(self, _from: int, _to: int, p: Piece, drop: Piece = None) -> Optional[Piece]:
         _from, _to = Square(_from), Square(_to)
         _from_bb = _from.bitboard
@@ -182,7 +206,7 @@ class StackedBitboard:
         captured = self.piece_at(_to)
         c = p.color
 
-        if captured is not None:   # need to toggle the square on the piece bb
+        if captured is not None:  # need to toggle the square on the piece bb
             _type = captured._type
             self.__boards[~c][_type] ^= _to_bb
             self.__color_occupancy[~c] ^= _to_bb
@@ -203,8 +227,8 @@ class StackedBitboard:
 
         # recalculate pinned pieces
         self.__compute_pin_set()
+        self.__check_sets[~c] = self.__compute_checkers(~c)
         return captured
-
 
     def place_piece(self, s: Square, p: Piece) -> None:
         if not isinstance(s, Square):
@@ -227,6 +251,7 @@ class StackedBitboard:
 
         # recalculate pinned pieces
         self.__compute_pin_set()
+        self.__check_sets[~c] = self.__compute_checkers(~c)
         return existing_piece_at_s
 
     def remove_piece(self, s: Square) -> None:
@@ -259,7 +284,9 @@ class StackedBitboard:
 
     def iter_check_candidates(self, c: Color) -> Generator[Piece, None, None]:
         for piece_type in CAN_CHECK:
-            yield self.test_piece(c, piece_type)
+            piece_bb = self.__boards[c][piece_type]
+            if piece_bb:
+                yield self.test_piece(c, piece_type), piece_bb
 
     def iter_material(
         self, c: Color

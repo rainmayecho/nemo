@@ -36,15 +36,14 @@ class NodeStat:
 
 def perft(depth: int = 1, fen=STARTING_FEN, position=None, move=None) -> NodeStat:
     position = position or Position(fen=fen)
-    moves = list(position.pseudo_legal_moves)
+    moves = list(position.legal_moves)
     n = NodeStat()
     if not depth:
         return NodeStat(1).update_from_move(move, position)
     for move in moves:
         zk_before = position.key
         position.make_move(move)
-        if position.is_legal():
-            n += perft(depth - 1, position=position, move=move)
+        n += perft(depth - 1, position=position, move=move)
         position.unmake_move(move)
         _ = 1
     return n

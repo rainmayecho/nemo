@@ -13,6 +13,7 @@ MAX_INT_32 = 2 ** 32 - 1
 
 PIN_MASKS = {}
 
+
 def rook_mask(s: Square) -> Bitboard:
     """Generates the relevant blocker mask for a rook on square s."""
     r, f = divmod(s, 8)
@@ -243,7 +244,7 @@ except Exception:
 def generate_pin_masks():
     global PIN_MASKS
     for i in range(64):
-        for j in range(i+1, 64):
+        for j in range(i + 1, 64):
             __rank = rank_mask(i) & rank_mask(j)
             __file = file_mask(i) & file_mask(j)
             __diag = diag_mask(i) & diag_mask(j)
@@ -254,7 +255,9 @@ def generate_pin_masks():
                 PIN_MASKS[(i, j)] = __mask
                 PIN_MASKS[(j, i)] = __mask
 
+
 generate_pin_masks()
+
 
 class Magic:
     @staticmethod
