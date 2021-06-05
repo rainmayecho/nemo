@@ -18,18 +18,16 @@ def negamax(
     if not depth:
         return evaluate(node), None
 
-    moves = node.pseudo_legal_moves
+    moves = node.legal_moves
     score = -INFINITY
     best = None
     for move in moves:
         node.make_move(move)
-        if node.is_legal():
-            # print(node)
-            _score = -negamax(node, depth - 1, -beta, -alpha)[0]
-            if _score > score:
-                score = _score
-                best = move
-            alpha = max(alpha, score)
+        _score = -negamax(node, depth - 1, -beta, -alpha)[0]
+        if _score > score:
+            score = _score
+            best = move
+        alpha = max(alpha, score)
         node.unmake_move(move)
         if alpha >= beta:
             best = move

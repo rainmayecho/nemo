@@ -70,7 +70,7 @@ class Piece(AbstractPiece):
         ]
 
     def pseudo_legal_moves(self, bitboards: StackedBitboard, state: State) -> List[Move]:
-        return [*self.captures(bitboards, state), *self.quiet_moves(bitboards, state)]
+        return [*self.captures(bitboards, state=state), *self.quiet_moves(bitboards, state=state)]
 
     def legal_moves(self, bitboards: StackedBitboard, state: State) -> List[Move]:
         if bitboards.king_in_double_check(self.color):
