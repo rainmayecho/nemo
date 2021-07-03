@@ -4,7 +4,15 @@ from pickle import dump, load, HIGHEST_PROTOCOL
 from random import getrandbits
 from typing import Tuple, Dict, List
 
-from .utils import popcnt, lsb, rank_mask, file_mask, diag_mask, antidiag_mask, BIT_TABLE
+from .utils import (
+    popcnt,
+    lsb,
+    rank_mask,
+    file_mask,
+    diag_mask,
+    antidiag_mask,
+    BIT_TABLE,
+)
 from .types import Bitboard, Square, Ranks, Files, Squares, EMPTY
 
 NOT_EDGES = ~(Ranks.RANK_8 | Ranks.RANK_1 | Files.A | Files.H)
@@ -175,7 +183,9 @@ def generate_magic(s: int, bits: int, bishop: bool):
     a, b, used = [0] * 4096, [0] * 4096, [0] * 4096
     mask = bishop_mask(s) if bishop else rook_mask(s)
     n = popcnt(mask)
-    print(f"Generating Attack Set for {'bishop' if bishop else 'rook'} on {Squares(s).name}...")
+    print(
+        f"Generating Attack Set for {'bishop' if bishop else 'rook'} on {Squares(s).name}..."
+    )
     for i in range(1 << n):
         b[i] = index_to_bitboard(i, n, mask)
         a[i] = bishop_attacks(s, b[i]) if bishop else rook_attacks(s, b[i])
@@ -230,7 +240,9 @@ def regenerate_magic():
     )
     with open("magic.pickle", "wb") as fp:
         dump(
-            (BISHOP_ATTACKS, ROOK_ATTACKS, BISHOP_MAGIC, ROOK_MAGIC), fp, protocol=HIGHEST_PROTOCOL
+            (BISHOP_ATTACKS, ROOK_ATTACKS, BISHOP_MAGIC, ROOK_MAGIC),
+            fp,
+            protocol=HIGHEST_PROTOCOL,
         )
 
 
@@ -266,7 +278,7 @@ def generate_rays():
                 d = 1
             elif diag_mask(i) & diag_mask(j):  # +9 dir
                 d = 9
-            elif antidiag_mask(i) & antidiag_mask(j): # +7 dir
+            elif antidiag_mask(i) & antidiag_mask(j):  # +7 dir
                 d = 7
             elif i % 8 == j % 8:  # +8 dir
                 d = 8
@@ -274,7 +286,7 @@ def generate_rays():
                 RAY_MASKS[(i, j)] = __mask
                 RAY_MASKS[(j, i)] = __mask
                 continue
-            
+
             k = i + d
             while k < j:
                 __mask |= 1 << k
@@ -282,9 +294,11 @@ def generate_rays():
 
             RAY_MASKS[(i, j)] = __mask
             RAY_MASKS[(j, i)] = __mask
-                    
+
+
 generate_pin_masks()
 generate_rays()
+
 
 class Magic:
     @staticmethod

@@ -17,7 +17,9 @@ class NodeStat:
         self.checks = 0
 
     def update_from_move(self, move: "Move", position: Position) -> None:
-        self.castles += bool(move.flags in (MoveFlags.KINGSIDE_CASTLE, MoveFlags.QUEENSIDE_CASTLE))
+        self.castles += bool(
+            move.flags in (MoveFlags.KINGSIDE_CASTLE, MoveFlags.QUEENSIDE_CASTLE)
+        )
         self.captures += bool(move.is_capture)
         self.ep += bool(move.is_enpassant_capture)
         self.promotions += bool(move.is_promotion)
@@ -31,7 +33,11 @@ class NodeStat:
         return self
 
     def __str__(self) -> str:
-        return dumps({k: getattr(self, k, 0) for k in self.ATTRS}, separators=(",", ": "), indent=4)
+        return dumps(
+            {k: getattr(self, k, 0) for k in self.ATTRS},
+            separators=(",", ": "),
+            indent=4,
+        )
 
 
 def perft(depth: int = 1, fen=STARTING_FEN, position=None, move=None) -> NodeStat:

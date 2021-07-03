@@ -33,7 +33,9 @@ class Position:
         if fen is not None:
             self.from_fen(fen)
 
-        self.key = hash(self.__boards)  # only do this once; incremental update per move.
+        self.key = hash(
+            self.__boards
+        )  # only do this once; incremental update per move.
 
     def clear(self):
         self.__boards = None
@@ -122,11 +124,15 @@ class Position:
             captured = self.boards.remove_piece(square_below(color, _to))
             self.boards.toggle_enpassant_board(~color)
         elif move.is_double_pawn_push:
-            other_king_bb_on_fifth = self.boards.king_bb(~color) & relative_fourth_rank_bb(color)
+            other_king_bb_on_fifth = self.boards.king_bb(
+                ~color
+            ) & relative_fourth_rank_bb(color)
             _to_bb = Square(_to).bitboard
             adj_bb = e_one(_to_bb) | w_one(_to_bb)
             ep_square = square_below(color, _to)
-            if not (other_king_bb_on_fifth and (adj_bb & self.boards.pinned_bb(~color))):
+            if not (
+                other_king_bb_on_fifth and (adj_bb & self.boards.pinned_bb(~color))
+            ):
                 self.boards.toggle_enpassant_board(color, ep_square)
             self.boards.move_piece(_from, _to, piece)
         elif move.is_promotion:
@@ -292,13 +298,17 @@ def test_pawns():
     assert white_pawn.captures(p.bitboards) == []
     assert len(white_pawn.quiet_moves(p.bitboards)) == 16
 
-    p = Position(fen="rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")  # pawn attacks
+    p = Position(
+        fen="rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2"
+    )  # pawn attacks
     assert len(white_pawn.captures(p.bitboards)) == 1
     assert str(white_pawn.captures(p.bitboards)[0]) == "e4d5"
     assert len(black_pawn.captures(p.bitboards)) == 1
     assert str(black_pawn.captures(p.bitboards)[0]) == "d5e4"
 
-    p = Position(fen="rnbqkbnr/1pp1pppp/p7/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3")  # enpassant
+    p = Position(
+        fen="rnbqkbnr/1pp1pppp/p7/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3"
+    )  # enpassant
     assert len(white_pawn.captures(p.bitboards)) == 1
     assert str(white_pawn.captures(p.bitboards)[0]) == "e5d6"
     assert len(black_pawn.captures(p.bitboards)) == 0

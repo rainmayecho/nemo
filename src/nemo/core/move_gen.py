@@ -1,7 +1,19 @@
 from collections import defaultdict
 from functools import lru_cache
 
-from .constants import MAX_SQUARE, MIN_SQUARE, MAX_INT, NORTH, EAST, SOUTH, WEST, NE, SE, SW, NW
+from .constants import (
+    MAX_SQUARE,
+    MIN_SQUARE,
+    MAX_INT,
+    NORTH,
+    EAST,
+    SOUTH,
+    WEST,
+    NE,
+    SE,
+    SW,
+    NW,
+)
 from .types import (
     DIRECTIONS,
     EMPTY,
@@ -143,7 +155,16 @@ def black_pawns_double_push(pawns: int) -> int:
 
 def king_attacks(s: int):
     s = 1 << s
-    return n_one(s) | ne_one(s) | e_one(s) | se_one(s) | s_one(s) | sw_one(s) | w_one(s) | nw_one(s)
+    return (
+        n_one(s)
+        | ne_one(s)
+        | e_one(s)
+        | se_one(s)
+        | s_one(s)
+        | sw_one(s)
+        | w_one(s)
+        | nw_one(s)
+    )
 
 
 rank_mask_ex = lambda s: (1 << s) ^ rank_mask(s)

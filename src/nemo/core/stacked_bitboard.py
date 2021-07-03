@@ -70,7 +70,9 @@ class StackedBitboard:
         attack_sets = {Color.WHITE: {}, Color.BLACK: {}}
         for c in self.__boards:
             for piece_type in ATTACKERS:
-                attack_sets[c][piece_type] = self.test_piece(c, piece_type).attack_set_empty(self)
+                attack_sets[c][piece_type] = self.test_piece(
+                    c, piece_type
+                ).attack_set_empty(self)
         self.__attack_sets = attack_sets
 
     def __initialize_pin_sets(self) -> None:
@@ -83,11 +85,15 @@ class StackedBitboard:
             king_square = bitscan_forward(king_bb)
             for piece_type in {PieceType.BISHOP, PieceType.ROOK}:
                 for square in iter_bitscan_forward(self.__boards[~c][piece_type]):
-                    pin_sets[c] |= self.__test_pin_set(c, piece_type, king_bb, king_square, square)
+                    pin_sets[c] |= self.__test_pin_set(
+                        c, piece_type, king_bb, king_square, square
+                    )
 
                 # Queen
                 for square in iter_bitscan_forward(self.__boards[~c][PieceType.QUEEN]):
-                    pin_sets[c] |= self.__test_pin_set(c, piece_type, king_bb, king_square, square)
+                    pin_sets[c] |= self.__test_pin_set(
+                        c, piece_type, king_bb, king_square, square
+                    )
 
         self.__pin_sets = pin_sets
 
@@ -101,7 +107,9 @@ class StackedBitboard:
     ):
         # check king contact
         piece = self.test_piece(~c, piece_type)
-        king_contact_bb = piece.__class__._attack_lookup(piece_square, self.by_color(~c)) & king_bb
+        king_contact_bb = (
+            piece.__class__._attack_lookup(piece_square, self.by_color(~c)) & king_bb
+        )
 
         # replace king as enemy piece
         king_attack_set_bb = piece.__class__._attack_lookup(
@@ -198,7 +206,9 @@ class StackedBitboard:
         s = bitscan_forward(self.__boards[c][PieceType.KING])
         return self.__square_occupancy[s]
 
-    def move_piece(self, _from: int, _to: int, p: Piece, drop: Piece = None) -> Optional[Piece]:
+    def move_piece(
+        self, _from: int, _to: int, p: Piece, drop: Piece = None
+    ) -> Optional[Piece]:
         _from, _to = Square(_from), Square(_to)
         _from_bb = _from.bitboard
         _to_bb = _to.bitboard
@@ -213,17 +223,23 @@ class StackedBitboard:
             _type = captured._type
             self.__boards[~c][_type] ^= _to_bb
             self.__color_occupancy[~c] ^= _to_bb
-            self.__attack_sets[~c][_type] = self.test_piece(~c, _type).attack_set_empty(self)
+            self.__attack_sets[~c][_type] = self.test_piece(~c, _type).attack_set_empty(
+                self
+            )
 
         if drop is not None:
             _type = drop._type
             self.__boards[~c][_type] ^= _from_bb
             self.__color_occupancy[~c] ^= _from_bb
-            self.__attack_sets[~c][_type] = self.test_piece(~c, _type).attack_set_empty(self)
+            self.__attack_sets[~c][_type] = self.test_piece(~c, _type).attack_set_empty(
+                self
+            )
 
         self.__boards[c][p._type] ^= _from_to_bb
         self.__color_occupancy[c] ^= _from_to_bb
-        self.__attack_sets[c][p._type] = self.test_piece(c, p._type).attack_set_empty(self)
+        self.__attack_sets[c][p._type] = self.test_piece(c, p._type).attack_set_empty(
+            self
+        )
 
         self.squares[_to] = p
         self.squares[_from] = drop
@@ -244,11 +260,15 @@ class StackedBitboard:
             _type = existing_piece_at_s._type
             self.__boards[~c][_type] ^= s_bb
             self.__color_occupancy[~c] ^= s_bb
-            self.__attack_sets[~c][_type] = self.test_piece(~c, _type).attack_set_empty(self)
+            self.__attack_sets[~c][_type] = self.test_piece(~c, _type).attack_set_empty(
+                self
+            )
 
         self.__boards[c][p._type] ^= s_bb  # Set the bit for the new piece
         self.__color_occupancy[c] ^= s_bb
-        self.__attack_sets[c][p._type] = self.test_piece(c, p._type).attack_set_empty(self)
+        self.__attack_sets[c][p._type] = self.test_piece(c, p._type).attack_set_empty(
+            self
+        )
 
         self.squares[s] = p
 
@@ -267,7 +287,9 @@ class StackedBitboard:
             _type = existing_piece_at_s._type
             self.__boards[c][_type] ^= s_bb
             self.__color_occupancy[c] ^= s_bb
-            self.__attack_sets[c][_type] = self.test_piece(c, _type).attack_set_empty(self)
+            self.__attack_sets[c][_type] = self.test_piece(c, _type).attack_set_empty(
+                self
+            )
         self.squares[s] = None
 
         # recalculate pinned pieces
@@ -295,11 +317,17 @@ class StackedBitboard:
         self, c: Color
     ) -> Generator[Tuple[PieceType, Bitboard, Bitboard], None, None]:
         for piece_type in CAN_CHECK:
-            yield piece_type, self.__boards[c][piece_type], self.__boards[~c][piece_type]
+            yield piece_type, self.__boards[c][piece_type], self.__boards[~c][
+                piece_type
+            ]
 
-    def iter_attacks(self, c: Color) -> Generator[Tuple[PieceType, Bitboard, Bitboard], None, None]:
+    def iter_attacks(
+        self, c: Color
+    ) -> Generator[Tuple[PieceType, Bitboard, Bitboard], None, None]:
         for piece_type in MOVABLE:
-            yield piece_type, self.__attack_sets[c][piece_type], self.__attack_sets[~c][piece_type]
+            yield piece_type, self.__attack_sets[c][piece_type], self.__attack_sets[~c][
+                piece_type
+            ]
 
     def __hash__(self) -> int:
         h = 0

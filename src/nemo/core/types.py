@@ -44,7 +44,9 @@ class _Bitboard(int):
         n = 8
         b = format(self, "064b")
         f = lambda c: " . " if c == "0" else " * "
-        return "\n\n".join([" ".join(map(f, b[i : i + n][::-1])) for i in range(0, len(b), n)])
+        return "\n\n".join(
+            [" ".join(map(f, b[i : i + n][::-1])) for i in range(0, len(b), n)]
+        )
 
     def __str__(self):
         return repr(self)
@@ -245,7 +247,13 @@ PIECE_SYMBOL_MAP = {
     (PieceType.KING, Color.BLACK): "♚",
 }
 PROMOTABLE = {PieceType.KNIGHT, PieceType.BISHOP, PieceType.ROOK, PieceType.QUEEN}
-CAN_CHECK = {PieceType.KNIGHT, PieceType.BISHOP, PieceType.ROOK, PieceType.QUEEN, PieceType.PAWN}
+CAN_CHECK = {
+    PieceType.KNIGHT,
+    PieceType.BISHOP,
+    PieceType.ROOK,
+    PieceType.QUEEN,
+    PieceType.PAWN,
+}
 MOVABLE = {
     PieceType.KNIGHT,
     PieceType.BISHOP,
@@ -391,7 +399,9 @@ class State:
         full_move_clock: int = 0,
     ):
         ep_square = (
-            Square(Squares[ep_square.upper()]._value_) if ep_square not in ("-", None) else None
+            Square(Squares[ep_square.upper()]._value_)
+            if ep_square not in ("-", None)
+            else None
         )
         castling_rights = castling_rights if castling_rights != "-" else "none"
         castling_rights = CastlingRights(CastlingRightsEnum[castling_rights]._value_)
@@ -399,7 +409,9 @@ class State:
         self.half_move_clock = int(half_move_clock)
         self.full_move_clock = int(full_move_clock)
         self.turn = Color.WHITE if turn in ("w", 0) else Color.BLACK
-        self.__stack = deque([SubState(castling=castling_rights, captured=None, ep=ep_square)])
+        self.__stack = deque(
+            [SubState(castling=castling_rights, captured=None, ep=ep_square)]
+        )
 
     @staticmethod
     def __update_castling_rights(prev, current):
