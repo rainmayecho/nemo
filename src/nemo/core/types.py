@@ -6,7 +6,12 @@ from itertools import chain
 from operator import ior
 from typing import Union, NamedTuple, Generator, Dict
 
-from .constants import MIN_SQUARE, MAX_SQUARE, MAX_INT, STARTING_FEN
+from .constants import (
+    MIN_SQUARE,
+    MAX_SQUARE,
+    MAX_INT,
+    STARTING_FEN,
+)
 from .utils import bitscan_forward
 
 
@@ -396,6 +401,13 @@ class State:
         self.turn = Color.WHITE if turn in ("w", 0) else Color.BLACK
         self.__stack = deque([SubState(castling=castling_rights, captured=None, ep=ep_square)])
 
+    @staticmethod
+    def __update_castling_rights(prev, current):
+        intersect = prev & current
+        if not intersect:  # already can't castle. make_move shouldnt toggle.
+            return prev
+        return prev ^ intersect
+
     def push(self, captured=None, castling=None, ep_square=None):
         self.full_move_clock += 1
         self.turn = ~self.turn
@@ -404,7 +416,7 @@ class State:
         # print("Castling state toggle: ", castling)
         # input()
         _s = SubState(
-            castling=cur.castling ^ castling,
+            castling=self.__update_castling_rights(cur.castling, castling),
             captured=captured,
             ep=ep_square,
         )
