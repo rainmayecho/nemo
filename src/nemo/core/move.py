@@ -87,6 +87,10 @@ class Move:
             return PieceType.BISHOP
 
     @property
+    def promotion_suffix(self):
+        return f"={INV_PIECE_TYPE_MAP.get(self.promotion_piece_type, '')}" if self.promotion_piece_type else ""
+
+    @property
     def _to(self):
         return self._move & 63
 
@@ -102,6 +106,12 @@ class Move:
     def uci(self) -> str:
         return str(self)
 
+
+    @property
+    def san_suffix(self) -> str:
+        capture = "x" if self.is_capture else ""
+        return f"{capture}{Squares(self._to).name.lower()}{self.promotion_suffix}"
+
     def __iter__(self):
         yield self._from
         yield self._to
@@ -113,7 +123,7 @@ class Move:
         return f"<Move {SQUARES[self._from].name.lower()} to {SQUARES[self._to].name.lower()} flags={self.flags}>"
 
     def __str__(self) -> str:
-        return f"{SQUARES[self._from].name.lower()}{SQUARES[self._to].name.lower()}{INV_PIECE_TYPE_MAP.get(self.promotion_piece_type, '')}"
+        return f"{SQUARES[self._from].name.lower()}{SQUARES[self._to].name.lower()}{self.promotion_suffix}"
 
 
 class MoveList:

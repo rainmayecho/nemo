@@ -22,7 +22,7 @@ W_PAWNS_TABLE = flatten(
         [5, -5,-10,  0,  0,-10, -5,  5],
         [5, 10, 10,-20,-20, 10, 10,  5],
         [0,  0,  0,  0,  0,  0,  0,  0],
-    ]
+    ][::-1]
 )
 
 B_PAWNS_TABLE = flatten(
@@ -35,7 +35,7 @@ B_PAWNS_TABLE = flatten(
         [5, -5,-10,  0,  0,-10, -5,  5],
         [5, 10, 10,-20,-20, 10, 10,  5],
         [0,  0,  0,  0,  0,  0,  0,  0],
-    ][::-1]
+    ]
 )
 
 KNIGHTS_TABLE = flatten(
@@ -61,7 +61,7 @@ W_BISHOPS_TABLE = flatten(
         [-10, 10, 10, 10, 10, 10, 10,-10],
         [-10,  5,  0,  0,  0,  0,  5,-10],
         [-20,-10,-10,-10,-10,-10,-10,-20],
-    ]
+    ][::-1]
 )
 
 B_BISHOPS_TABLE = flatten(
@@ -74,7 +74,7 @@ B_BISHOPS_TABLE = flatten(
         [-10, 10, 10, 10, 10, 10, 10,-10],
         [-10,  5,  0,  0,  0,  0,  5,-10],
         [-20,-10,-10,-10,-10,-10,-10,-20],
-    ][::-1]
+    ]
 )
 
 W_ROOKS_TABLE = flatten(
@@ -87,7 +87,7 @@ W_ROOKS_TABLE = flatten(
         [-5,  0,  0,  0,  0,  0,  0, -5],
         [-5,  0,  0,  0,  0,  0,  0, -5],
         [0,  0,  0,  5,  5,  0,  0,  0],
-    ]
+    ][::-1]
 )
 
 B_ROOKS_TABLE = flatten(
@@ -100,7 +100,7 @@ B_ROOKS_TABLE = flatten(
         [-5,  0,  0,  0,  0,  0,  0, -5],
         [-5,  0,  0,  0,  0,  0,  0, -5],
         [0,  0,  0,  5,  5,  0,  0,  0],
-    ][::-1]
+    ]
 )
 
 W_QUEENS_TABLE = flatten(
@@ -113,7 +113,7 @@ W_QUEENS_TABLE = flatten(
         [-10 ,  5,  5,  5,  5,  5,  0,-10],
         [-10 ,  0,  5,  0,  0,  0,  0,-10],
         [-20,-10,-10 , -5, -5,-10,-10,-20],
-    ]
+    ][::-1]
 )
 
 B_QUEENS_TABLE = flatten(
@@ -126,7 +126,7 @@ B_QUEENS_TABLE = flatten(
         [-10 ,  5,  5,  5,  5,  5,  0,-10],
         [-10 ,  0,  5,  0,  0,  0,  0,-10],
         [-20,-10,-10 , -5, -5,-10,-10,-20],
-    ][::-1]
+    ]
 )
 
 W_KINGS_TABLE = flatten(
@@ -139,7 +139,7 @@ W_KINGS_TABLE = flatten(
         [-10,-20,-20,-20,-20,-20,-20,-10],
         [20, 20,  0,  0,  0,  0, 20, 20],
         [20, 30, 10,  0,  0, 10, 30, 20],
-    ]
+    ][::-1]
 )
 
 B_KINGS_TABLE = flatten(
@@ -152,7 +152,7 @@ B_KINGS_TABLE = flatten(
         [-10,-20,-20,-20,-20,-20,-20,-10],
         [20, 20,  0,  0,  0,  0, 20, 20],
         [20, 30, 10,  0,  0, 10, 30, 20],
-    ][::-1]
+    ]
 )
 
 
@@ -177,9 +177,9 @@ PIECE_SQUARE_TABLES = {
 
 W_MAT = 1.0
 W_KS = 0.8
-W_ATT = 0.6
-W_MOB = .5
-W_PLAC = 1.1
+W_ATT = .2
+W_MOB = .2
+W_PLAC = 1.0
 
 
 def material_difference(c: Color, bitboards: StackedBitboard) -> float:
@@ -226,8 +226,8 @@ def placement(c: Color, bitboards: StackedBitboard) -> float:
 
 HEURISTICS = [
     (material_difference, W_MAT),
-    # (attacks, W_ATT),
-    # (mobility, W_MOB),
+    (attacks, W_ATT),
+    (mobility, W_MOB),
     (placement, W_PLAC),
 ]
 

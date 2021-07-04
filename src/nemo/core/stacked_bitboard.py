@@ -206,6 +206,17 @@ class StackedBitboard:
         s = bitscan_forward(self.__boards[c][PieceType.KING])
         return self.__square_occupancy[s]
 
+    def get_king_square(self, c: Color) -> Square:
+        return bitscan_forward(self.__boards[c][PieceType.KING])
+
+    def get_checker(self, c: Color) -> Tuple[Bitboard, Piece, Square]:
+        """Gets a singular checking bitboard, piece, and square against the king of color ``c`.`
+
+        The assumption is that this is only used in a single-check scenario.
+        """
+        s = bitscan_forward(self.__check_sets[c])
+        return self.__check_sets[c], self.__square_occupancy[s], s
+
     def move_piece(
         self, _from: int, _to: int, p: Piece, drop: Piece = None
     ) -> Optional[Piece]:
@@ -215,7 +226,7 @@ class StackedBitboard:
         _from_to_bb = _from_bb | _to_bb
         captured = self.piece_at(_to)
         if p is None:
-            print(self)
+            print(self.__dict__)
             input()
         c = p.color
 

@@ -18,6 +18,9 @@ def negamax(
     if not depth:
         return evaluate(node), None
 
+    if node.is_checkmate():
+        return INFINITY, None
+
     moves = node.legal_moves
     score = -INFINITY
     best = None

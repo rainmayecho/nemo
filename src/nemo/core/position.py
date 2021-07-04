@@ -6,15 +6,18 @@ from .piece import Piece
 from .types import (
     Bitboard,
     Color,
+    PieceAndSquare,
     PieceType,
     INV_PIECE_TYPE_MAP,
     PIECE_REGISTRY,
     PROMOTABLE,
+    UNBLOCKABLE_CHECKERS,
     Square,
     Squares,
     State,
 )
 from .stacked_bitboard import StackedBitboard
+from .magic import Magic
 from .move import Move
 from .move_gen import (
     e_one,
@@ -24,6 +27,7 @@ from .move_gen import (
     square_above,
     square_below,
 )
+from .utils import bitscan_forward
 from .zobrist import ZOBRIST_KEYS, ZOBRIST_CASTLE, ZOBRIST_EP, ZOBRIST_TURN
 
 
@@ -80,6 +84,8 @@ class Position:
             ep_square,
             hmc,
             fmc,
+            move=None,
+            fen=fen,
         )
 
     @property
@@ -98,26 +104,38 @@ class Position:
     def is_check(self):
         return self.boards.king_in_check(self.state.turn)
 
+    def is_double_check(self):
+        return self.boards.king_in_double_check(self.state.turn)
+
     def is_checkmate(self):
-        # c = self.state.turn
-        # if self.boards.king_in_check(c):
-        #     king = self.boards.get_king(c)
-        #     # TODO:
-        #     # Check for ways to capture the attacker
-        #     #   - Double check can't be captured.
-        #     # Check for ways to block the attack set
-        #     #   - Double check can't be blocked.
-        #     # Check for legal moves for king
-        #     #   move set & opponent attack set
+        c = self.state.turn
+        ksq = self.boards.get_king_square(c)
+        king = self.boards.piece_at(ksq)
+        king_moves = list(king.legal_moves(self.bitboards, self.state))
+        can_move = len(king_moves) > 0
+        if self.is_double_check():
+            return not can_move
+        elif self.is_check():
+            check_bb, checking_piece, s = self.boards.get_checker(c)
+            attack_bb = self.boards.attacks_by_color(c)
+            can_capture = attack_bb & check_bb
+
+            can_block = 1
+            if checking_piece._type in UNBLOCKABLE_CHECKERS:
+                can_block = 0
+            else:
+                can_block = attack_bb & Magic.get_ray_mask(ksq, bitscan_forward(check_bb))
+            return (can_capture or can_block or can_move)
         return False
 
-    def make_move(self, move: Move) -> None:
+    def make_move(self, move: Move, details=False) -> PieceAndSquare:
         _from, _to = move
         color = self.state.turn
         captured = None
         promotion_piece = None
         ep_square = None
         piece = self.boards.piece_at(_from)
+        fen = self.fen
         # assert piece is not None
         if move.is_enpassant_capture:
             self.boards.move_piece(_from, _to, piece)
@@ -153,7 +171,9 @@ class Position:
         if piece._type == PieceType.KING:
             castling_rights_mask = 3 << (2 * color)
         elif piece._type == PieceType.ROOK:
-            b = int(relative_rook_squares(color, short=False)[0] == _from) + 1
+            long = int(relative_rook_squares(color, short=False)[0] == _from)
+            short = int(relative_rook_squares(color, short=True)[0] == _from)
+            b = int(long or short) + int(long)
             castling_rights_mask = b << (2 * color)
 
         pidx = getattr(piece, "zobrist_index", 12)
@@ -163,15 +183,20 @@ class Position:
             castling=castling_rights_mask,
             captured=captured,
             ep_square=ep_square,
+            move=move,
+            fen=fen
         )
         self.key ^= self.zk_xor(
             _from, _to, pidx, cidx, ppidx, self.state.castling_rights, ep_square
         )
 
+        return PieceAndSquare(piece=piece, square=_from)
+
+
     def unmake_move(self, _move: Move) -> None:
         move = ~_move
         _from, _to = move
-        castling, captured, ep_square = self.state.pop()
+        castling, captured, ep_square, _, _ = self.state.pop()
         # castling, _, _ = self.state.top()
         color = self.state.turn
         piece = self.boards.piece_at(_from)

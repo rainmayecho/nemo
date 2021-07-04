@@ -1,5 +1,6 @@
 from cProfile import Profile
-from itertools import chain
+from itertools import chain, zip_longest
+from typing import Iterable
 
 from .constants import MAX_INT
 
@@ -209,3 +210,7 @@ class SectionProfiler:
 
 def flatten(l: list) -> list:
     return [*chain.from_iterable(l)]
+
+def pairwise(iterable: Iterable) -> Iterable:
+    it = iter(iterable)
+    return zip_longest(it, it, fillvalue=None)

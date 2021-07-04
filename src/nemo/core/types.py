@@ -60,7 +60,15 @@ UNIVERSE = Bitboard(MAX_INT)
 DIRECTIONS = [8, 1, -8, -1, 7, 9, -7, -9]
 
 
-class Square(int):
+class _BitboardMixin(int):
+    _value_ = 0
+
+    @property
+    def bitboard(self) -> Bitboard:
+        return Bitboard(1 << self._value_)
+
+
+class Square(_BitboardMixin):
     def __new__(cls, value):
         assert value >= MIN_SQUARE and value <= MAX_SQUARE
         return super().__new__(cls, value)
@@ -74,12 +82,16 @@ class AutoIncrementingEnum(IntEnum):
     def __new__(cls, *args):
         value = len(cls.__members__)
         obj = int.__new__(cls)
-        obj._value_ = Square(value)
+        obj._value_ = int(value)
         return obj
 
-    @property
-    def bitboard(self) -> Bitboard:
-        return Bitboard(1 << self._value_)
+
+class SquareEnum(AutoIncrementingEnum):
+    def __new__(cls, *args):
+        value = len(cls.__members__)
+        obj = int.__new__(cls)
+        obj._value_ = Square(value)
+        return obj
 
 
 class PieceType(IntEnum):
@@ -103,7 +115,7 @@ class Color(IntEnum):
         return Color.WHITE if self else Color.BLACK
 
 
-class Squares(AutoIncrementingEnum):
+class Squares(_BitboardMixin, SquareEnum):
     """Squares by their algebraic notation name."""
 
     A1 = "a1"
@@ -270,6 +282,7 @@ ATTACKERS = {
     PieceType.PAWN,
     PieceType.KING,
 }
+UNBLOCKABLE_CHECKERS = {PieceType.KNIGHT, PieceType.PAWN}
 SLIDERS = {PieceType.BISHOP, PieceType.ROOK, PieceType.QUEEN}
 
 PIECE_REGISTRY = {}
@@ -371,7 +384,7 @@ class CastlingRights(int):
         return f"<CastlingRights {cr.name}={cr._value_}>"
 
     def __str__(self) -> str:
-        return CastlingRightsEnum(self).name
+        return CastlingRightsEnum(self).name if self else "-"
 
     def __getitem__(self, c: Color) -> int:
         if c == Color.WHITE:
@@ -385,6 +398,8 @@ SubState = NamedTuple(
         ("castling", CastlingRights),
         ("captured", AbstractPiece),
         ("ep", Square),
+        ("move", "Move"),
+        ("fen", str),
     ],
 )
 
@@ -397,6 +412,8 @@ class State:
         ep_square: str = None,
         half_move_clock: int = 0,
         full_move_clock: int = 0,
+        move=None,
+        fen=None,
     ):
         ep_square = (
             Square(Squares[ep_square.upper()]._value_)
@@ -410,17 +427,18 @@ class State:
         self.full_move_clock = int(full_move_clock)
         self.turn = Color.WHITE if turn in ("w", 0) else Color.BLACK
         self.__stack = deque(
-            [SubState(castling=castling_rights, captured=None, ep=ep_square)]
+            [SubState(castling=castling_rights, captured=None, ep=ep_square, move=move, fen=fen)]
         )
+
+    def __iter__(self):
+        return reversed(self.__stack)
 
     @staticmethod
     def __update_castling_rights(prev, current):
         intersect = prev & current
-        if not intersect:  # already can't castle. make_move shouldnt toggle.
-            return prev
-        return prev ^ intersect
+        return (prev ^ intersect) if intersect else prev
 
-    def push(self, captured=None, castling=None, ep_square=None):
+    def push(self, captured=None, castling=None, ep_square=None, move=None, fen=None):
         self.full_move_clock += 1
         self.turn = ~self.turn
         cur = self.__stack[0]
@@ -431,6 +449,8 @@ class State:
             castling=self.__update_castling_rights(cur.castling, castling),
             captured=captured,
             ep=ep_square,
+            move=move,
+            fen=fen
         )
         self.__stack.appendleft(_s)
 
@@ -453,6 +473,10 @@ class State:
         return self.__stack[0].ep
 
     @property
+    def ply(self):
+        return self.full_move_clock
+
+    @property
     def fen_suffix(self) -> str:
         eps = self.ep_square
         return " ".join(
@@ -465,3 +489,5 @@ class State:
                 self.full_move_clock,
             )
         )
+
+PieceAndSquare = NamedTuple("PieceAndSquare", [("piece", AbstractPiece), ("square", Square)])
