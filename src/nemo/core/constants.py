@@ -22,3 +22,5 @@ SEE = SE + EAST
 SSE = SOUTH + SE
 SSW = SOUTH + SW
 SWW = SW + WEST
+
+INFINITY = float("inf")

@@ -5,9 +5,9 @@ from nemo.core.game import Game
 def run(n=40):
     p = Position()
     for _ in range(n):
-        score, move = negamax(p, 5)
-        print(f"Evaluation = {score}")
-        p.make_move(move)
+        result = negamax(p, 3)
+        print(f"Evaluation = {result.score}")
+        p.make_move(result.move)
         print(p)
         # print(list(p.legal_moves))
         # input()

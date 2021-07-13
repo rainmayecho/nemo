@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from collections import deque, defaultdict
+from dataclasses import dataclass
 from enum import IntEnum
 from functools import reduce, lru_cache
 from itertools import chain
@@ -7,6 +8,7 @@ from operator import ior
 from typing import Union, NamedTuple, Generator, Dict
 
 from .constants import (
+    INFINITY,
     MIN_SQUARE,
     MAX_SQUARE,
     MAX_INT,
@@ -284,6 +286,7 @@ ATTACKERS = {
 }
 UNBLOCKABLE_CHECKERS = {PieceType.KNIGHT, PieceType.PAWN}
 SLIDERS = {PieceType.BISHOP, PieceType.ROOK, PieceType.QUEEN}
+XRAYS = {PieceType.PAWN, PieceType.BISHOP, PieceType.ROOK, PieceType.QUEEN}
 
 PIECE_REGISTRY = {}
 
@@ -314,6 +317,14 @@ class AbstractPiece(ABC):
 
     @abstractmethod
     def legal_moves(self, *args, **kwargs):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def legal_captures(self, *args, **kwargs):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def legal_quiet(self, *args, **kwargs):
         raise NotImplementedError()
 
     @abstractmethod
@@ -491,3 +502,11 @@ class State:
         )
 
 PieceAndSquare = NamedTuple("PieceAndSquare", [("piece", AbstractPiece), ("square", Square)])
+
+@dataclass
+class SearchResult:
+    ply: int
+    score: float
+    move: "Move" = None
+    alpha: float = -INFINITY
+    beta: float = INFINITY

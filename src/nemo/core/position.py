@@ -94,6 +94,16 @@ class Position:
             yield from iter(test_piece.legal_moves(self.bitboards, self.state))
 
     @property
+    def legal_captures(self):
+        for test_piece in self.boards.iterpieces(self.state.turn):
+            yield from iter(test_piece.legal_captures(self.bitboards, self.state))
+
+    @property
+    def legal_quiet(self):
+        for test_piece in self.boards.iterpieces(self.state.turn):
+            yield from iter(test_piece.legal_quiet(self.bitboards, self.state))
+
+    @property
     def pseudo_legal_moves(self):
         for test_piece in self.boards.iterpieces(self.state.turn):
             yield from iter(test_piece.pseudo_legal_moves(self.bitboards, self.state))
@@ -113,19 +123,23 @@ class Position:
         king = self.boards.piece_at(ksq)
         king_moves = list(king.legal_moves(self.bitboards, self.state))
         can_move = len(king_moves) > 0
-        if self.is_double_check():
+        if can_move:
+            return False
+        elif self.is_double_check():
             return not can_move
         elif self.is_check():
             check_bb, checking_piece, s = self.boards.get_checker(c)
             attack_bb = self.boards.attacks_by_color(c)
-            can_capture = attack_bb & check_bb
+            can_capture = bool(attack_bb & check_bb)
 
             can_block = 1
             if checking_piece._type in UNBLOCKABLE_CHECKERS:
                 can_block = 0
             else:
                 can_block = attack_bb & Magic.get_ray_mask(ksq, bitscan_forward(check_bb))
-            return (can_capture or can_block or can_move)
+            if can_block or can_capture:
+                return False
+            return True
         return False
 
     def make_move(self, move: Move, details=False) -> PieceAndSquare:
@@ -179,6 +193,7 @@ class Position:
         pidx = getattr(piece, "zobrist_index", 12)
         cidx = getattr(captured, "zobrist_index", 12)
         ppidx = getattr(promotion_piece, "zobrist_index", pidx)
+        self.boards.toggle_enpassant_board(~color)
         self.state.push(
             castling=castling_rights_mask,
             captured=captured,

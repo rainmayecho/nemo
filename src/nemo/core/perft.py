@@ -6,7 +6,7 @@ from .position import Position
 
 
 class NodeStat:
-    ATTRS = ("nodes", "captures", "ep", "castles", "promotions", "checks")
+    ATTRS = ("nodes", "captures", "ep", "castles", "promotions", "checks", "checkmates")
 
     def __init__(self, n=0):
         self.nodes = n
@@ -15,6 +15,7 @@ class NodeStat:
         self.castles = 0
         self.promotions = 0
         self.checks = 0
+        self.checkmates = 0
 
     def update_from_move(self, move: "Move", position: Position) -> None:
         self.castles += bool(
@@ -24,6 +25,7 @@ class NodeStat:
         self.ep += bool(move.is_enpassant_capture)
         self.promotions += bool(move.is_promotion)
         self.checks += bool(position.is_check())
+        self.checkmates += bool(position.is_checkmate())
         return self
 
     def __add__(self, other: "NodeStat"):

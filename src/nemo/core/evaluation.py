@@ -1,8 +1,12 @@
-from .types import Bitboard, Color, PieceType
+from typing import Tuple
+
+from .types import Bitboard, Color, PieceType, Square, AbstractPiece, EMPTY
+from .move import Move
 from .stacked_bitboard import StackedBitboard
 from .utils import popcnt, iter_bitscan_forward, flatten
 
 PIECE_VALUES = {
+    PieceType.NULL: 0,
     PieceType.ENPASSANT: 0,
     PieceType.PAWN: 100,
     PieceType.KNIGHT: 320,
@@ -179,10 +183,55 @@ W_MAT = 1.0
 W_KS = 0.8
 W_ATT = .2
 W_MOB = .2
-W_PLAC = 1.0
+W_PLAC = 1.25
 
 
-def material_difference(c: Color, bitboards: StackedBitboard) -> float:
+def least_valuable_attacker(c: Color, bitboards: StackedBitboard, attack_defend_bb: Bitboard) -> Tuple[Bitboard, AbstractPiece]:
+    for piece_type in list(PieceType)[1:-1]:
+        piece = bitboards.test_piece(c, piece_type)
+        intersect = bitboards.board_for(piece) & attack_defend_bb
+        if intersect:
+            return (lsb(intersect), piece)
+        piece = bitboards.test_piece(~c, piece_type)
+        intersect = bitboards.board_for(piece) & attack_defend_bb
+        if intersect:
+            return (lsb(intersect), piece._type)
+    return (EMPTY, PieceType.NULL)
+
+
+def static_exchange_evaluation(c: Color, bitboards: StackedBitboard, move: Move = None) -> float:
+    if move is None:
+        return 0
+    i = 0
+    gain = [0] * 32
+    target = boards.piece_at(move._to)
+    occ = boards.occupancy
+    from_bb = move._from.bitboard
+    attack_defend_bb = bitboards.attack_defend_to(_to, c)
+    xrays = boards.xrays_bb
+    gain[i] = PIECE_VALUES[target._type]
+    assert target is not None
+
+    pt = PieceType.NULL
+    while True:
+        i += 1
+        gain[i] = PIECE_VALUES[pt] - gain[i-1]
+        if max(-gain[i-1], gain[i]) < 0:
+            break
+
+        attack_defend_bb ^= from_bb
+        occ ^= from_bb
+        from_bb, pt = least_valuable_attacker(i & 1, bitboards, attack_defend_bb)
+        if not from_bb:
+            break
+
+    i -= 1
+    while i:
+        gain[i-1] = -max(-gain[i-1], gain[i])
+    return gain[0]
+
+
+def material_difference(c: Color, bitboards: StackedBitboard, **kwargs) -> float:
     """Returns the material difference from the perspective of ``c``."""
     score = 0
     for piece_type, self_piece_bb, other_piece_bb in bitboards.iter_material(c):
@@ -192,7 +241,7 @@ def material_difference(c: Color, bitboards: StackedBitboard) -> float:
     return score
 
 
-def attacks(c: Color, bitboards: StackedBitboard) -> float:
+def attacks(c: Color, bitboards: StackedBitboard, **kwargs) -> float:
     attack = 0
     self_bb = bitboards.by_color(c)
     other_bb = bitboards.by_color(~c)
@@ -203,7 +252,7 @@ def attacks(c: Color, bitboards: StackedBitboard) -> float:
     return attack
 
 
-def mobility(c: Color, bitboards: StackedBitboard) -> float:
+def mobility(c: Color, bitboards: StackedBitboard, **kwargs) -> float:
     mob = 0
     self_bb = bitboards.by_color(c)
     other_bb = bitboards.by_color(~c)
@@ -212,7 +261,7 @@ def mobility(c: Color, bitboards: StackedBitboard) -> float:
     return mob
 
 
-def placement(c: Color, bitboards: StackedBitboard) -> float:
+def placement(c: Color, bitboards: StackedBitboard, **kwargs) -> float:
     placement = 0
     self_bb = bitboards.by_color(c)
     other_bb = bitboards.by_color(~c)
@@ -226,8 +275,8 @@ def placement(c: Color, bitboards: StackedBitboard) -> float:
 
 HEURISTICS = [
     (material_difference, W_MAT),
-    (attacks, W_ATT),
-    (mobility, W_MOB),
+    # (attacks, W_ATT),
+    # (mobility, W_MOB),
     (placement, W_PLAC),
 ]
 
