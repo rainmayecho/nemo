@@ -343,7 +343,7 @@ class King(Piece):
             yield Move(_from=_from, _to=_to, flags=MoveFlags.QUIET)
 
         castling_rights = state.castling_rights[c]
-        if castling_rights and ((1 << _from) & Files.E):
+        if castling_rights and ((1 << _from) & Files.E) and checks_bb == EMPTY:
             krsq = relative_rook_squares(c, short=True)[0]
             qrsq = relative_rook_squares(c, short=False)[0]
 

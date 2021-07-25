@@ -117,7 +117,7 @@ class Color(IntEnum):
         return Color.WHITE if self else Color.BLACK
 
 
-class Squares(_BitboardMixin, SquareEnum):
+class Squares(SquareEnum):
     """Squares by their algebraic notation name."""
 
     A1 = "a1"
@@ -191,6 +191,10 @@ class Squares(_BitboardMixin, SquareEnum):
     F8 = "f8"
     G8 = "g8"
     H8 = "h8"
+
+    @property
+    def bitboard(self) -> Bitboard:
+        return Bitboard(1 << self._value_)
 
 
 class Ranks:
@@ -503,6 +507,11 @@ class State:
 
 PieceAndSquare = NamedTuple("PieceAndSquare", [("piece", AbstractPiece), ("square", Square)])
 
+class NodeType(IntEnum):
+    EXACT = 0
+    ALPHA = 1
+    BETA = 2
+
 @dataclass
 class SearchResult:
     ply: int
@@ -510,3 +519,4 @@ class SearchResult:
     move: "Move" = None
     alpha: float = -INFINITY
     beta: float = INFINITY
+    nodetype: NodeType = None

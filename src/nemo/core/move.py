@@ -9,6 +9,8 @@ class MoveFlags(IntEnum):
     QUEENSIDE_CASTLE = 3
     CAPTURES = 4
     ENPASSANT_CAPTURE = 5
+    ILLEGAL = 6
+    ILLEGAL_2 = 7
     PROMOTION = 8
     PROMOTION_N = 8
     PROMOTION_B = 9
@@ -21,15 +23,19 @@ class MoveFlags(IntEnum):
 
 
 class Move:
-    def __init__(self, _from: int = 0, _to: int = 0, flags: int = 0, uci: str = None):
-        if uci is not None:
-            _from = Squares[uci[0:2].upper()]._value_
-            _to = Squares[uci[2:4].upper()]._value_
+    def __init__(self, _from: int = 0, _to: int = 0, flags: int = 0, uci: str = None, _move : int = None):
+        if _move is not None:
+            self._move = _move
+            self._flags = _move >> 12
         else:
-            _from = SQUARES[_from]._value_
-            _to = SQUARES[_to]._value_
-        self._flags = flags
-        self._move = (flags << 12) | ((_from & 63) << 6) | (_to & 63)
+            if uci is not None:
+                _from = Squares[uci[0:2].upper()]._value_
+                _to = Squares[uci[2:4].upper()]._value_
+            else:
+                _from = SQUARES[_from]._value_
+                _to = SQUARES[_to]._value_
+            self._flags = flags
+            self._move = (flags << 12) | ((_from & 63) << 6) | (_to & 63)
 
     @property
     def castling_rights_premask(self) -> int:
@@ -125,6 +131,8 @@ class Move:
     def __str__(self) -> str:
         return f"{SQUARES[self._from].name.lower()}{SQUARES[self._to].name.lower()}{self.promotion_suffix}"
 
+    def __hash__(self) -> int:
+        return hash(self._move)
 
 class MoveList:
     """Encapsulates ordering a sequence of candidate moves"""

@@ -44,7 +44,10 @@ class PGNWriter:
         elif move.is_castle_queenside:
             return f"O-O-O{position_suffix}"
         else:
-            piece_str = INV_PIECE_TYPE_MAP.get(piece._type).upper() if piece._type != PieceType.PAWN else ""
+            if piece._type != PieceType.PAWN:
+                piece_str = INV_PIECE_TYPE_MAP.get(piece._type).upper()
+            elif piece._type == PieceType.PAWN:
+                piece_str = Squares(move._from).name.lower()[0] if move.is_capture else ""
             piece_bb = position.boards.board_for(piece)
             ranks, files = set(), set()
             n = popcnt(piece_bb)

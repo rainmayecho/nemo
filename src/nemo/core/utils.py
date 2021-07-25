@@ -3,6 +3,7 @@ from itertools import chain, zip_longest
 from typing import Iterable
 
 from .constants import MAX_INT
+from .ext.build import build_library
 
 BITSCAN_INDEX = [
     0,
@@ -138,19 +139,28 @@ BIT_TABLE = [
     8,
 ]
 
-_bb = lambda v: v & MAX_INT
+
+
+EXT_EXISTS, lib = build_library()
+if EXT_EXISTS and hasattr(lib, "bb"):
+    _bb = lib.bb
+else:
+    _bb = lambda v: v & MAX_INT
 
 DEBRUIJN_CONST = _bb(0x03F79D71B4CB0A89)
 
-
-def lsb(v: int) -> int:
-    """Returns the least significant bit of the input."""
-    return v & -v
-
-
-def popcnt(v: int) -> int:
-    """Returns the number of ones in a binary representation of the input."""
-    return bin(v).count("1")
+if EXT_EXISTS and hasattr(lib, "lsb"):
+    lsb = lib.lsb
+else:
+    def lsb(v: int) -> int:
+        """Returns the least significant bit of the input."""
+        return v & -v
+if EXT_EXISTS and hasattr(lib, "popcnt"):
+    popcnt = lib.popcnt
+else:
+    def popcnt(v: int) -> int:
+        """Returns the number of ones in a binary representation of the input."""
+        return bin(v).count("1")
 
 
 def iter_lsb(bb: int) -> "Generator[int, None, None]":
@@ -160,15 +170,17 @@ def iter_lsb(bb: int) -> "Generator[int, None, None]":
         yield _lsb
         bb ^= _lsb
 
-
-def bitscan_forward(bb: int):
-    return BITSCAN_INDEX[_bb((bb & -bb) * DEBRUIJN_CONST) >> 58]
+if EXT_EXISTS and hasattr(lib, "bitScanForward"):
+    bitscan_forward = lib.bitScanForward
+else:
+    def bitscan_forward(bb: int):
+        return BITSCAN_INDEX[_bb(lsb(bb) * DEBRUIJN_CONST) >> 58]
 
 
 def iter_bitscan_forward(bb: int) -> "Generator[int, None, None]":
     if bb:
         for isolated_lsb in iter_lsb(bb):
-            yield BITSCAN_INDEX[_bb(isolated_lsb * DEBRUIJN_CONST) >> 58]
+            yield bitscan_forward(isolated_lsb)
 
 
 def rank_mask(s: int) -> int:

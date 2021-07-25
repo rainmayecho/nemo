@@ -30,11 +30,16 @@ from .move_gen import (
 from .utils import bitscan_forward
 from .zobrist import ZOBRIST_KEYS, ZOBRIST_CASTLE, ZOBRIST_EP, ZOBRIST_TURN
 
+def emptyboard():
+    return Bitboard(0)
+
+def boardmaker():
+    return defaultdict(emptyboard)
 
 class Position:
     def __init__(self, fen=STARTING_FEN):
         self.clear()
-        if fen is not None:
+        if fen:
             self.from_fen(fen)
 
         self.key = hash(
@@ -50,7 +55,7 @@ class Position:
         split_fen = split_fen + ["0", "1"] if len(split_fen) < 6 else split_fen
         ranks, turn, castling_rights, ep_square, hmc, fmc = split_fen
         rows = ranks.split("/")[::-1]
-        boards = defaultdict(lambda: defaultdict(lambda: Bitboard(0)))
+        boards = defaultdict(boardmaker)
         square_occupancy = [None] * 64
 
         if ep_square != "-":
