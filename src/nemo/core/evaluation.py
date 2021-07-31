@@ -3,7 +3,7 @@ from typing import Tuple
 from .types import Bitboard, Color, PieceType, Square, AbstractPiece, EMPTY
 from .move import Move
 from .stacked_bitboard import StackedBitboard
-from .utils import popcnt, iter_bitscan_forward, flatten
+from .utils import popcnt, iter_bitscan_forward, flatten, lsb
 
 PIECE_VALUES = {
     PieceType.NULL: 0,
@@ -15,7 +15,6 @@ PIECE_VALUES = {
     PieceType.QUEEN: 900,
     PieceType.KING: 20000,
 }
-
 MATE_UPPER = (
     PIECE_VALUES[PieceType.QUEEN] * 8 +
     2 * (
@@ -38,7 +37,7 @@ W_PAWNS_TABLE = flatten(
         [0,  0,  0,  0,  0,  0,  0,  0],
         [50, 50, 50, 50, 50, 50, 50, 50],
         [10, 10, 20, 30, 30, 20, 10, 10],
-        [5,  5, 15, 27, 27, 15,  5,  5],
+        [5,  5, 15, 35, 35, 15,  5,  5],
         [0,  0,  0, 25, 25,  0,  0,  0],
         [5, -5,-10,  0,  0,-10, -5,  5],
         [5, 10, 10,-20,-20, 10, 10,  5],
@@ -208,7 +207,7 @@ def least_valuable_attacker(c: Color, bitboards: StackedBitboard, attack_defend_
         piece = bitboards.test_piece(c, piece_type)
         intersect = bitboards.board_for(piece) & attack_defend_bb
         if intersect:
-            return (lsb(intersect), piece)
+            return (lsb(intersect), piece._type)
         piece = bitboards.test_piece(~c, piece_type)
         intersect = bitboards.board_for(piece) & attack_defend_bb
         if intersect:
@@ -216,20 +215,35 @@ def least_valuable_attacker(c: Color, bitboards: StackedBitboard, attack_defend_
     return (EMPTY, PieceType.NULL)
 
 
-def static_exchange_evaluation(c: Color, bitboards: StackedBitboard, move: Move = None) -> float:
+def see(node: "Position", move: Move = None) -> float:
+    """Static-Exchange-Evaluation
+
+    Args:
+        node: The current position to see
+        move (Move, optional): The capture move to play. Defaults to None.
+
+    Returns:
+        float: The score associated with this capture. Positive is good.
+    """
+    c = node.state.turn
+    bitboards = node.boards
     if move is None:
+        return 0
+    if not move.is_capture:
         return 0
     i = 0
     gain = [0] * 32
-    target = boards.piece_at(move._to)
-    occ = boards.occupancy
-    from_bb = move._from.bitboard
-    attack_defend_bb = bitboards.attack_defend_to(_to, c)
-    xrays = boards.xrays_bb
+    target = bitboards.piece_at(move._to)
+    if target is None:
+        return 0
+    occ = bitboards.occupancy
+    from_bb = Bitboard(1 << move._from)
+    attack_defend_bb = bitboards.attack_defend_to(move._to, c)
+    xrays = bitboards.xrays_bb
     gain[i] = PIECE_VALUES[target._type]
     assert target is not None
 
-    pt = PieceType.NULL
+    pt = (bitboards.piece_at(move._from))._type
     while True:
         i += 1
         gain[i] = PIECE_VALUES[pt] - gain[i-1]
@@ -238,13 +252,14 @@ def static_exchange_evaluation(c: Color, bitboards: StackedBitboard, move: Move 
 
         attack_defend_bb ^= from_bb
         occ ^= from_bb
-        from_bb, pt = least_valuable_attacker(i & 1, bitboards, attack_defend_bb)
+        from_bb, pt = least_valuable_attacker(~c, bitboards, attack_defend_bb)
         if not from_bb:
             break
 
     i -= 1
     while i:
         gain[i-1] = -max(-gain[i-1], gain[i])
+        i -= 1
     return gain[0]
 
 
@@ -302,3 +317,15 @@ def evaluate(position: "Position") -> float:
     c = position.state.turn
     boards = position.boards
     return sum(H(c, boards) * w for H, w in HEURISTICS)
+
+
+def test():
+    from .position import Position
+
+    p = Position(fen="r1bqkb1r/pppp1ppp/2n5/4p3/4P3/2N2N2/PPPP1PPP/R1BQKB1R w KQkq - 0 1")
+    for move in p.legal_moves:
+        print(move, see(p.state.turn, p.boards, move))
+        input()
+
+if __name__ == "__main__":
+    test()

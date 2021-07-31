@@ -6,17 +6,21 @@ import sys
 from abc import ABC, abstractmethod
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, wait, TimeoutError
+from pprint import pprint
+from threading import Event
 from time import time, sleep
-from typing import Callable, List, Optional
+from typing import Any, Callable, List, Optional, TypeVar, Generic
 
 from nemo.core.game import Game
 from nemo.core.move import Move
 from nemo.core.position import Position
-from nemo.core.search import negamax, probe_ttable, deepen
+from nemo.core.search import Searcher, probe_ttable
 from nemo.core.transposition import TTable, Killers
 from nemo.core.constants import STARTING_FEN, MAX_PLY
 
 logging.basicConfig(filename='nemo.log', level=logging.DEBUG)
+
+T = TypeVar("T")
 
 class Unbuffered:
     def __init__(self, stream):
@@ -33,6 +37,20 @@ def output(line: str) -> None:
     out = Unbuffered(sys.stdout)
     print(line, file=out)
     logging.debug(line)
+
+
+class Timer:
+    def __init__(self, timeout: float, callback: Callable[..., Any]):
+        self.__timeout = timeout
+        self.__callback = callback
+        self.__task = asyncio.create_task(self.__job())
+
+    async def __job(self):
+        await asyncio.sleep(self.__timeout)
+        await self.__callback()
+
+    def cancel(self):
+        self.__task.cancel()
 
 
 class AbstractUCIInterface(ABC):
@@ -80,13 +98,16 @@ class AbstractUCIInterface(ABC):
 
 class Engine(AbstractUCIInterface):
 
-    def __init__(self):
+    def __init__(self, executor: ThreadPoolExecutor = None):
         self.__debug = False
         self.__options = {}
         self.__position = Position()
+        self.__fen = STARTING_FEN
         self.__key = self.__position.key
 
-        self.__executor = ThreadPoolExecutor(max_workers=16)
+        self.__executor = executor or ThreadPoolExecutor(max_workers=4)
+        self.__stopped = Event()
+        self.__searcher = Searcher(event=self.__stopped)
         self.__search_task = None
         self.__tasks = deque([])
         self.__best_move = None
@@ -160,23 +181,30 @@ class Engine(AbstractUCIInterface):
             self.__depth = 10
 
         self.__search_task = self.__executor.submit(
-            deepen, self.__position, self.__depth
+            self.__searcher.search, self.__position, self.__depth
         )
         if movetime is not None:
             self.__timeout = movetime / 1000
-            asyncio.sleep(self.__timeout)
-            self.bestmove()
+            Timer(self.__timeout, self.stop)
 
     async def stop(self):
+        print("stopping...")
+        self.__stopped.set()
         self.bestmove()
+        self.reset()
 
+    def reset(self):
+        self.__position = Position(fen=self.__fen)
+        self.__stopped.clear()
 
     async def ponderhit(self):
         pass
 
     async def info(self):
         output(TTable.extract_principal_variation(Position(fen=self.__fen)))
-        output(Killers)
+        # pprint(TTable)
+        pprint(dict(Killers))
+        pprint(self.__searcher.stats)
 
     async def quit(self):
         sys.exit(0)
@@ -195,24 +223,23 @@ class Engine(AbstractUCIInterface):
         return self.__key
 
 
-async def ainput(prompt: str = ''):
-    return await asyncio.get_event_loop().run_in_executor(None, input, prompt)
+async def ainput(prompt: str = "", executor = None):
+    return await asyncio.get_event_loop().run_in_executor(executor, input, prompt)
 
 async def main():
-    engine = Engine()
     executor = ThreadPoolExecutor()
+    engine = Engine(executor=executor)
     loop = asyncio.get_running_loop()
 
     task = None
     while True:
-        inp = (await ainput("input: ")).split(" ")
+        inp = (await ainput("input: ", executor=executor)).split(" ")
         cmd, args = None, tuple()
         if len(inp) >= 2:
             cmd, args = inp[0], (" ".join(inp[1:]),)
         else:
             cmd = inp[0]
         try:
-            print(args)
             await asyncio.create_task(getattr(engine, cmd)(*args))
         except AttributeError as e:
             print(e)
@@ -220,3 +247,6 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+    """
+    1. a4 a5 2. Nc3 b5 3. axb5 b8a6 is problematic
+    """

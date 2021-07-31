@@ -15,19 +15,22 @@ class _TranspositionTable(dict):
         super().__setitem__(key, value)
 
     def extract_principal_variation(self, node: "Position") -> List["Move"]:
-        moves = []
+        results = []
         before = node.key
         while node.key in self:
-            move = self[node.key].move
-            if move:
-                node.make_move(move)
-                moves.append(move)
+            result = self[node.key]
+            print(result)
+            if result.move:
+                node.make_move(result.move)
+                results.append((result.move, result.score))
+            else:
+                break
 
-        for move in moves[::-1]:
+        for move, _ in results[::-1]:
             node.unmake_move(move)
 
         assert node.key == before
-        return moves
+        return results
 
     def reset(self):
         self.clear()

@@ -2,6 +2,8 @@ from collections import defaultdict
 import io
 
 from .constants import STARTING_FEN
+from .exceptions import IllegalMoveException
+from .pgn import PGNWriter
 from .piece import Piece
 from .types import (
     Bitboard,
@@ -123,29 +125,30 @@ class Position:
         return self.boards.king_in_double_check(self.state.turn)
 
     def is_checkmate(self):
-        c = self.state.turn
-        ksq = self.boards.get_king_square(c)
-        king = self.boards.piece_at(ksq)
-        king_moves = list(king.legal_moves(self.bitboards, self.state))
-        can_move = len(king_moves) > 0
-        if can_move:
-            return False
-        elif self.is_double_check():
-            return not can_move
-        elif self.is_check():
-            check_bb, checking_piece, s = self.boards.get_checker(c)
-            attack_bb = self.boards.attacks_by_color(c)
-            can_capture = bool(attack_bb & check_bb)
+        return self.is_check() and len(list(self.legal_moves)) == 0
+        # c = self.state.turn
+        # ksq = self.boards.get_king_square(c)
+        # king = self.boards.piece_at(ksq)
+        # king_moves = list(king.legal_moves(self.bitboards, self.state))
+        # can_move = len(king_moves) > 0
+        # if can_move:
+        #     return False
+        # elif self.is_double_check():
+        #     return not can_move
+        # elif self.is_check():
+        #     check_bb, checking_piece, s = self.boards.get_checker(c)
+        #     attack_bb = self.boards.attacks_by_color(c)
+        #     can_capture = bool(attack_bb & check_bb)
 
-            can_block = 1
-            if checking_piece._type in UNBLOCKABLE_CHECKERS:
-                can_block = 0
-            else:
-                can_block = attack_bb & Magic.get_ray_mask(ksq, bitscan_forward(check_bb))
-            if can_block or can_capture:
-                return False
-            return True
-        return False
+        #     can_block = 1
+        #     if checking_piece._type in UNBLOCKABLE_CHECKERS:
+        #         can_block = 0
+        #     else:
+        #         can_block = attack_bb & Magic.get_ray_mask(ksq, bitscan_forward(check_bb))
+        #     if can_block or can_capture:
+        #         return False
+        #     return True
+        # return False
 
     def make_move(self, move: Move, details=False) -> PieceAndSquare:
         _from, _to = move

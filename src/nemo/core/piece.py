@@ -116,7 +116,7 @@ class Piece(AbstractPiece):
         )
 
     @staticmethod
-    def get_check_mask(c: Color, checks_bb: Square, bitboards: StackedBitboard) -> Bitboard:
+    def get_check_mask(c: Color, checks_bb: Bitboard, bitboards: StackedBitboard) -> Bitboard:
         king_sq = bitscan_forward(bitboards.king_bb(c))
         return Magic.get_ray_mask(king_sq, bitscan_forward(checks_bb)) if checks_bb else UNIVERSE
 
@@ -140,23 +140,23 @@ class Pawn(Piece):
 
     @staticmethod
     def _attack_set_empty(
-        c: Color, pawns: Bitboard, bitboards: StackedBitboard, s_bb: Square = UNIVERSE
+        c: Color, pawns: Bitboard, bitboards: StackedBitboard, s_bb: Bitboard = UNIVERSE
     ) -> Bitboard:
         return PAWN_ATTACKS[c](pawns & s_bb)
 
     @staticmethod
     def _attack_set(
-        c: Color, pawns: Bitboard, bitboards: StackedBitboard, s_bb: Square = UNIVERSE
+        c: Color, pawns: Bitboard, bitboards: StackedBitboard, s_bb: Bitboard = UNIVERSE, target: Bitboard = UNIVERSE
     ) -> Bitboard:
         occ = bitboards.by_color(~c) | bitboards.ep_board(~c)
-        return PAWN_ATTACKS[c](pawns & s_bb) & occ
+        return PAWN_ATTACKS[c](pawns & s_bb) & occ & target
 
     @staticmethod
     def _defend_set(
-        c: Color, pawns: Bitboard, bitboards: StackedBitboard, s_bb: Square = UNIVERSE
+        c: Color, pawns: Bitboard, bitboards: StackedBitboard, s_bb: Bitboard = UNIVERSE, target: Bitboard = UNIVERSE
     ) -> Bitboard:
         occ = bitboards.by_color(c) | bitboards.ep_board(c)
-        return PAWN_ATTACKS[c](pawns & s_bb) & occ
+        return PAWN_ATTACKS[c](pawns & s_bb) & occ & target
 
     @staticmethod
     def _captures(
@@ -235,7 +235,7 @@ class Knight(Piece):
 
     @staticmethod
     def _attack_set_empty(
-        c: Color, knights: Bitboard, bitboards: Bitboard, s_bb: Square = UNIVERSE
+        c: Color, knights: Bitboard, bitboards: Bitboard, s_bb: Bitboard = UNIVERSE
     ) -> Bitboard:
         return reduce(
             ior, (KNIGHT_ATTACKS[_from] for _from in iter_bitscan_forward(knights & s_bb)), EMPTY
@@ -243,20 +243,20 @@ class Knight(Piece):
 
     @staticmethod
     def _attack_set(
-        c: Color, knights: Bitboard, bitboards: Bitboard, s_bb: Square = UNIVERSE
+        c: Color, knights: Bitboard, bitboards: Bitboard, s_bb: Bitboard = UNIVERSE, target: Bitboard = UNIVERSE
     ) -> Bitboard:
         return reduce(
             ior, (KNIGHT_ATTACKS[_from] for _from in iter_bitscan_forward(knights & s_bb)), EMPTY
-        ) & bitboards.by_color(~c)
+        ) & bitboards.by_color(~c) & target
 
 
     @staticmethod
     def _defend_set(
-        c: Color, knights: Bitboard, bitboards: StackedBitboard, s_bb: Square = UNIVERSE
+        c: Color, knights: Bitboard, bitboards: StackedBitboard, s_bb: Bitboard = UNIVERSE, target: Bitboard = UNIVERSE
     ) -> Bitboard:
         return reduce(
             ior, (KNIGHT_ATTACKS[_from] for _from in iter_bitscan_forward(knights & s_bb)), EMPTY
-        ) & bitboards.by_color(c)
+        ) & bitboards.by_color(c) & target
 
     @staticmethod
     def _captures(
@@ -293,7 +293,7 @@ class King(Piece):
 
     @staticmethod
     def _attack_set_empty(
-        c: Color, king: Bitboard, bitboards: Bitboard, s_bb: Square = UNIVERSE
+        c: Color, king: Bitboard, bitboards: Bitboard, s_bb: Bitboard = UNIVERSE
     ) -> Bitboard:
         return reduce(
             ior, (KING_ATTACKS[_from] for _from in iter_bitscan_forward(king & s_bb)), EMPTY
@@ -301,19 +301,19 @@ class King(Piece):
 
     @staticmethod
     def _attack_set(
-        c: Color, king: Bitboard, bitboards: Bitboard, s_bb: Square = UNIVERSE
+        c: Color, king: Bitboard, bitboards: Bitboard, s_bb: Bitboard = UNIVERSE, target: Bitboard = UNIVERSE
     ) -> Bitboard:
         return reduce(
             ior, (KING_ATTACKS[_from] for _from in iter_bitscan_forward(king & s_bb)), EMPTY
-        ) & bitboards.by_color(~c)
+        ) & bitboards.by_color(~c) & target
 
     @staticmethod
     def _defend_set(
-        c: Color, king: Bitboard, bitboards: Bitboard, s_bb: Square = UNIVERSE
+        c: Color, king: Bitboard, bitboards: Bitboard, s_bb: Bitboard = UNIVERSE, target: Bitboard = UNIVERSE
     ) -> Bitboard:
         return reduce(
             ior, (KING_ATTACKS[_from] for _from in iter_bitscan_forward(king & s_bb)), EMPTY
-        ) & bitboards.by_color(c)
+        ) & bitboards.by_color(c) & target
 
 
     @staticmethod
@@ -384,7 +384,7 @@ class SlidingPiece(Piece):
 
     @classmethod
     def _attack_set_empty(
-        cls, c: Color, piece_bb: Bitboard, bitboards: Bitboard, s_bb: Square = UNIVERSE
+        cls, c: Color, piece_bb: Bitboard, bitboards: Bitboard, s_bb: Bitboard = UNIVERSE
     ) -> Bitboard:
         blockers = (bitboards.by_color(c) | bitboards.by_color(~c)) & ~(bitboards.king_bb(~c))
         attack_set = Bitboard(0)
@@ -394,23 +394,23 @@ class SlidingPiece(Piece):
 
     @classmethod
     def _attack_set(
-        cls, c: Color, piece_bb: Bitboard, bitboards: Bitboard, s_bb: Square = UNIVERSE
+        cls, c: Color, piece_bb: Bitboard, bitboards: Bitboard, s_bb: Bitboard = UNIVERSE, target: Bitboard = UNIVERSE
     ) -> Bitboard:
         blockers = bitboards.by_color(c) | bitboards.by_color(~c)
         attack_set = Bitboard(0)
         for _from in iter_bitscan_forward(piece_bb & s_bb):
             attack_set |= cls._attack_lookup(_from, blockers)
-        return attack_set & bitboards.by_color(~c)
+        return attack_set & bitboards.by_color(~c) & target
 
     @classmethod
     def _defend_set(
-        cls, c: Color, piece_bb: Bitboard, bitboards: Bitboard, s_bb: Square = UNIVERSE
+        cls, c: Color, piece_bb: Bitboard, bitboards: Bitboard, s_bb: Bitboard = UNIVERSE, target: Bitboard = UNIVERSE
     ) -> Bitboard:
         blockers = bitboards.by_color(c) | bitboards.by_color(~c)
         attack_set = Bitboard(0)
         for _from in iter_bitscan_forward(piece_bb & s_bb):
             attack_set |= cls._attack_lookup(_from, blockers)
-        return attack_set & bitboards.by_color(c)
+        return attack_set & bitboards.by_color(c) & target
 
     @classmethod
     def _captures(

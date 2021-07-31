@@ -1,6 +1,7 @@
 from collections import defaultdict
 from typing import Callable, Dict, List, Generator, Tuple, Optional
 
+from .exceptions import IllegalMoveException
 from .types import (
     AbstractPiece as Piece,
     Bitboard,
@@ -223,14 +224,12 @@ class StackedBitboard:
     def move_piece(
         self, _from: int, _to: int, p: Piece, drop: Piece = None
     ) -> Optional[Piece]:
-        _from, _to = Square(_from), Square(_to)
         _from_bb = _from.bitboard
         _to_bb = _to.bitboard
         _from_to_bb = _from_bb | _to_bb
         captured = self.piece_at(_to)
         if p is None:
-            print(self.__dict__)
-            input()
+            raise IllegalMoveException()
         c = p.color
 
         if captured is not None:  # need to toggle the square on the piece bb
@@ -265,8 +264,6 @@ class StackedBitboard:
         return captured
 
     def place_piece(self, s: Square, p: Piece) -> None:
-        if not isinstance(s, Square):
-            s = Square(s)
         existing_piece_at_s = self.piece_at(s)
         placing_piece_bb = self.board_for(p)
         c = p.color
@@ -354,11 +351,11 @@ class StackedBitboard:
         for pt in MOVABLE:
             attacker_p, defender_p = self.test_piece(attacker, pt), self.test_piece(defender, pt)
             for s in iter_bitscan_forward(self.__boards[attacker][pt]):
-                if attacker_p._attack_set(attacker, (1 << s), self, _to):
+                if attacker_p._attack_set(attacker, Bitboard(1 << s), self, target=Bitboard(1 << _to)):
                     attack_defend_bb |= (1 << s)
 
             for s in iter_bitscan_forward(self.__boards[defender][pt]):
-                if defender_p._defend_set(defender, (1 << s), self, _to):
+                if defender_p._defend_set(defender, Bitboard(1 << s), self, target=Bitboard(1 << _to)):
                     attack_defend_bb |= (1 << s)
         return attack_defend_bb
 
@@ -366,7 +363,7 @@ class StackedBitboard:
     def xrays_bb(self) -> Bitboard:
         bb = EMPTY
         for pt in XRAYS:
-            bb |= (self.__boards[Color.WHITE][pt] | self.__boards[Color.BLACK[pt]])
+            bb |= (self.__boards[Color.WHITE][pt] | self.__boards[Color.BLACK][pt])
         return bb
 
     def __hash__(self) -> int:

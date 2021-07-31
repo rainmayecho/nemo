@@ -1,6 +1,6 @@
 from .types import INV_PIECE_TYPE_MAP, Squares, PieceType
 from .utils import iter_bitscan_forward, popcnt, pairwise
-from .position import Position
+# from .position import Position
 
 TAG_NAME_MAP =  {
     "plycount": "PlyCount",
@@ -27,6 +27,7 @@ class PGNWriter:
     )
     def __init__(self, position: "Position", **tags):
         self.__position = position
+        self.__position_class = position.__class__
         for tag, value in tags.items():
             setattr(self, tag.lower(), value)
         self.fen = position.fen
@@ -69,7 +70,7 @@ class PGNWriter:
     def itermoves(self):
         it = iter(self.__position.state)
         ply = self.__position.state.ply
-        p = Position(fen=next(it).fen)
+        p = self.__position_class(fen=next(it).fen)
 
         for i, states in enumerate(pairwise(it)):
             first, second = states

@@ -16,7 +16,6 @@ from .constants import (
 )
 from .utils import bitscan_forward
 
-
 class _Bitboard(int):
     def hexstring(self):
         return hex(self)
@@ -273,11 +272,11 @@ CAN_CHECK = {
     PieceType.PAWN,
 }
 MOVABLE = {
+    PieceType.PAWN,
     PieceType.KNIGHT,
     PieceType.BISHOP,
     PieceType.ROOK,
     PieceType.QUEEN,
-    PieceType.PAWN,
     PieceType.KING,
 }
 ATTACKERS = {

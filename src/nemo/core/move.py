@@ -1,5 +1,5 @@
 from enum import IntEnum
-from .types import SQUARES, Squares, CastlingRights, PieceType, INV_PIECE_TYPE_MAP
+from .types import Square, SQUARES, Squares, CastlingRights, PieceType, INV_PIECE_TYPE_MAP
 
 
 class MoveFlags(IntEnum):
@@ -119,8 +119,8 @@ class Move:
         return f"{capture}{Squares(self._to).name.lower()}{self.promotion_suffix}"
 
     def __iter__(self):
-        yield self._from
-        yield self._to
+        yield Square(self._from)
+        yield Square(self._to)
 
     def __invert__(self) -> "Move":
         return self.__class__(self._to, self._from, self.flags)
