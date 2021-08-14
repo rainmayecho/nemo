@@ -178,7 +178,7 @@ class Engine(AbstractUCIInterface):
         if depth is not None:
             self.__depth = depth
         else:
-            self.__depth = 10
+            self.__depth = 12
 
         self.__search_task = self.__executor.submit(
             self.__searcher.search, self.__position, self.__depth

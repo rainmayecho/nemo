@@ -48,6 +48,24 @@ nw_one = lambda s: (s << 7 & NOT_H)
 se_one = lambda s: (s >> 7 & NOT_A)
 sw_one = lambda s: (s >> 9 & NOT_H)
 
+STEPS = [
+    n_one,
+    ne_one,
+    e_one,
+    se_one,
+    s_one,
+    sw_one,
+    w_one,
+    nw_one,
+]
+
+def ring(s: Square) -> Bitboard:
+    _bb = Bitboard(1 << s)
+    bb = Bitboard(0)
+    for step in STEPS:
+        bb |= step(_bb)
+    return bb
+
 
 def relative_second_rank_bb(color: Color) -> Bitboard:
     return Ranks.RANK_2 if color == Color.WHITE else Ranks.RANK_7

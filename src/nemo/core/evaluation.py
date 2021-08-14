@@ -2,6 +2,7 @@ from typing import Tuple
 
 from .types import Bitboard, Color, PieceType, Square, AbstractPiece, EMPTY
 from .move import Move
+from .move_gen import ring
 from .stacked_bitboard import StackedBitboard
 from .utils import popcnt, iter_bitscan_forward, flatten, lsb
 
@@ -14,6 +15,10 @@ PIECE_VALUES = {
     PieceType.ROOK: 490,
     PieceType.QUEEN: 900,
     PieceType.KING: 20000,
+}
+COLOR_MULT = {
+    Color.WHITE: 1,
+    Color.BLACK: -1,
 }
 MATE_UPPER = (
     PIECE_VALUES[PieceType.QUEEN] * 8 +
@@ -196,10 +201,10 @@ PIECE_SQUARE_TABLES = {
 }
 
 W_MAT = 1.0
-W_KS = 0.8
+W_KS = 1.2
 W_ATT = .2
-W_MOB = .2
-W_PLAC = 1.25
+W_MOB = .25
+W_PLAC = 1.1
 
 
 def least_valuable_attacker(c: Color, bitboards: StackedBitboard, attack_defend_bb: Bitboard) -> Tuple[Bitboard, AbstractPiece]:
@@ -305,18 +310,40 @@ def placement(c: Color, bitboards: StackedBitboard, **kwargs) -> float:
     return placement
 
 
+def king_safety(c: Color, bitboards: StackedBitboard, **kwargs) -> float:
+    v = 0
+    self_bb = bitboards.by_color(c)
+    other_bb = bitboards.by_color(~c)
+    self_king_ring = ring(bitboards.get_king_square(c))
+    other_king_ring = ring(bitboards.get_king_square(~c))
+    for piece_type, self_attack_bb, other_attack_bb in bitboards.iter_attacks(c):
+        if piece_type == PieceType.KING:
+            continue
+        v += popcnt(other_king_ring & self_attack_bb) - popcnt(self_king_ring & other_attack_bb)
+    return v * 10
+
+
 HEURISTICS = [
     (material_difference, W_MAT),
     # (attacks, W_ATT),
     # (mobility, W_MOB),
     (placement, W_PLAC),
+    (king_safety, W_KS),
 ]
 
 
-def evaluate(position: "Position") -> float:
+def evaluate(position: "Position", as_opponent=False) -> float:
     c = position.state.turn
-    boards = position.boards
-    return sum(H(c, boards) * w for H, w in HEURISTICS)
+    k = COLOR_MULT[c]
+    bonus = 0
+    if position.is_checkmate():
+        return MATE_UPPER * -k
+    elif position.is_stalemate():
+        return 0
+    bonus += 142 * k * position.other_in_check()
+    bonus += 397 * k * (position.other_in_double_check() or len(list(position.legal_moves)) <= 2)
+    v = sum(H(c, position.boards) * w for H, w in HEURISTICS)
+    return v + bonus
 
 
 def test():

@@ -110,6 +110,10 @@ class Position:
         for test_piece in self.boards.iterpieces(self.state.turn):
             yield from iter(test_piece.legal_quiet(self.bitboards, self.state))
 
+    def king_legal_moves(self, c: Color):
+        king = self.boards.get_king(c)
+        yield from iter(king.legal_moves(self.bitboards, self.state))
+
     @property
     def pseudo_legal_moves(self):
         for test_piece in self.boards.iterpieces(self.state.turn):
@@ -124,31 +128,20 @@ class Position:
     def is_double_check(self):
         return self.boards.king_in_double_check(self.state.turn)
 
+    def other_in_check(self):
+        return self.boards.king_in_check(~self.state.turn)
+
+    def other_in_double_check(self):
+        return self.boards.king_in_double_check(~self.state.turn)
+
     def is_checkmate(self):
         return self.is_check() and len(list(self.legal_moves)) == 0
-        # c = self.state.turn
-        # ksq = self.boards.get_king_square(c)
-        # king = self.boards.piece_at(ksq)
-        # king_moves = list(king.legal_moves(self.bitboards, self.state))
-        # can_move = len(king_moves) > 0
-        # if can_move:
-        #     return False
-        # elif self.is_double_check():
-        #     return not can_move
-        # elif self.is_check():
-        #     check_bb, checking_piece, s = self.boards.get_checker(c)
-        #     attack_bb = self.boards.attacks_by_color(c)
-        #     can_capture = bool(attack_bb & check_bb)
 
-        #     can_block = 1
-        #     if checking_piece._type in UNBLOCKABLE_CHECKERS:
-        #         can_block = 0
-        #     else:
-        #         can_block = attack_bb & Magic.get_ray_mask(ksq, bitscan_forward(check_bb))
-        #     if can_block or can_capture:
-        #         return False
-        #     return True
-        # return False
+    def is_stalemate(self):
+        no_legal_moves = (not self.is_check() and len(list(self.legal_moves)) == 0)
+        #  need to check all the insufficient material cases as well.
+        if no_legal_moves:
+            return True
 
     def make_move(self, move: Move, details=False) -> PieceAndSquare:
         _from, _to = move

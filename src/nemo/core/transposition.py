@@ -2,7 +2,7 @@ from collections import deque, defaultdict
 from typing import Any, List
 
 class _TranspositionTable(dict):
-    def __init__(self, max_size = 10**7):
+    def __init__(self, max_size = 10**8):
         super().__init__()
         self.__max_size = max_size
         self.__stack = deque([])
@@ -17,9 +17,14 @@ class _TranspositionTable(dict):
     def extract_principal_variation(self, node: "Position") -> List["Move"]:
         results = []
         before = node.key
+        seen = defaultdict(int)
         while node.key in self:
             result = self[node.key]
-            print(result)
+            seen[node.key] += 1
+            print(seen)
+            if seen[node.key] >= 3:
+                break
+            # print(result)
             if result.move:
                 node.make_move(result.move)
                 results.append((result.move, result.score))

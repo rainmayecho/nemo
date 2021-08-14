@@ -228,12 +228,12 @@ class StackedBitboard:
         _to_bb = _to.bitboard
         _from_to_bb = _from_bb | _to_bb
         captured = self.piece_at(_to)
-        if p is None:
-            raise IllegalMoveException()
+        # if p is None:
+        #     raise IllegalMoveException()
         c = p.color
 
         if captured is not None:  # need to toggle the square on the piece bb
-            assert captured._type != PieceType.KING
+            # assert captured._type != PieceType.KING
             _type = captured._type
             self.__boards[~c][_type] ^= _to_bb
             self.__color_occupancy[~c] ^= _to_bb
