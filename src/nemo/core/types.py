@@ -456,9 +456,6 @@ class State:
         self.full_move_clock += 1
         self.turn = ~self.turn
         cur = self.__stack[0]
-        # print("Castling state: ", cur.castling)
-        # print("Castling state toggle: ", castling)
-        # input()
         _s = SubState(
             castling=self.__update_castling_rights(cur.castling, castling),
             captured=captured,

@@ -143,7 +143,12 @@ class Position:
         if no_legal_moves:
             return True
 
-    def make_move(self, move: Move, details=False) -> PieceAndSquare:
+    def make_move(self, move: Move, details=False, uci=False) -> PieceAndSquare:
+        if uci:
+            uci_map = {
+                m.uci: m for m in self.legal_moves
+            }
+            move = uci_map[move.uci]
         _from, _to = move
         color = self.state.turn
         captured = None

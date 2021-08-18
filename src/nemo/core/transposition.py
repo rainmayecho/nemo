@@ -21,10 +21,8 @@ class _TranspositionTable(dict):
         while node.key in self:
             result = self[node.key]
             seen[node.key] += 1
-            print(seen)
             if seen[node.key] >= 3:
                 break
-            # print(result)
             if result.move:
                 node.make_move(result.move)
                 results.append((result.move, result.score))

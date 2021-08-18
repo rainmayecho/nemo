@@ -94,7 +94,7 @@ class Move:
 
     @property
     def promotion_suffix(self):
-        return f"={INV_PIECE_TYPE_MAP.get(self.promotion_piece_type, '')}" if self.promotion_piece_type else ""
+        return f"{INV_PIECE_TYPE_MAP.get(self.promotion_piece_type, '')}" if self.promotion_piece_type else ""
 
     @property
     def _to(self):

@@ -130,6 +130,7 @@ class Searcher:
             result = self.negamax(p, d, alpha, beta)
             if result:
                 store_ttable(p.key, result, force=True)
+                print(p.key, result)
             d += 1
         return TTable[p.key]
 
@@ -224,13 +225,11 @@ class Searcher:
             self.make_move(move)
             if node.is_legal:
                 score = max(score, -self.negamax(node, depth - 1, -beta, -alpha, ply + 1).score)
-                # print(f"considering {move}...{score}")
             self.unmake_move(move)
             if score > alpha or score >= MATE_LOWER:
                 alpha = score
                 best = move
             if alpha >= beta:
-                # print(f"{move} caused a cutoff!")
                 update_killers(move, score, depth)
                 break
 

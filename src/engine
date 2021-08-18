@@ -1,3 +1,5 @@
+#! /Users/vishnu.raveendran/repos/nemo/env/bin/python
+
 import asyncio
 import logging
 import re
@@ -56,6 +58,7 @@ class Timer:
 class UCIParser:
     @classmethod
     def parse(line: str):
+        pass
 
 
 class AbstractUCIInterface(ABC):
@@ -147,6 +150,7 @@ class Engine(AbstractUCIInterface):
         pass
 
     async def ucinewgame(self):
+        await self.stop()
         self.__position = Position()
 
     async def position(
@@ -235,7 +239,7 @@ async def main():
 
     task = None
     while True:
-        inp = (await ainput("input: ", executor=executor)).split(" ")
+        inp = (await ainput("", executor=executor)).split(" ")
         cmd, args = None, tuple()
         if len(inp) >= 2:
             cmd, args = inp[0], (" ".join(inp[1:]),)

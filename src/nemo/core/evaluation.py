@@ -201,10 +201,10 @@ PIECE_SQUARE_TABLES = {
 }
 
 W_MAT = 1.0
-W_KS = 1.2
+W_KS = 1.4
 W_ATT = .2
 W_MOB = .25
-W_PLAC = 1.1
+W_PLAC = 1.3
 
 
 def least_valuable_attacker(c: Color, bitboards: StackedBitboard, attack_defend_bb: Bitboard) -> Tuple[Bitboard, AbstractPiece]:
@@ -325,8 +325,8 @@ def king_safety(c: Color, bitboards: StackedBitboard, **kwargs) -> float:
 
 HEURISTICS = [
     (material_difference, W_MAT),
-    # (attacks, W_ATT),
-    # (mobility, W_MOB),
+    (attacks, W_ATT),
+    (mobility, W_MOB),
     (placement, W_PLAC),
     (king_safety, W_KS),
 ]
