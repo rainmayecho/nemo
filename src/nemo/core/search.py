@@ -67,7 +67,7 @@ def probe_ttable(key: int, depth: int = 0) -> SearchResult:
 
 def store_ttable(key: int, result: SearchResult, force: bool = False) -> None:
     existing = TTable.get(key)
-    if existing is None or (existing is not None and result.ply <= existing.ply and result.score > existing.score):
+    if existing is None or (existing is not None and result.ply >= existing.ply):
         TTable[key] = result
 
 
@@ -123,6 +123,7 @@ class Searcher:
         self.__make_move_partial = partial(p.make_move)
         self.__unmake_move_partial = partial(p.unmake_move)
         self.__us = p.state.turn
+        self.__root_key = p.key
 
         d = 1
         alpha, beta = -INFINITY, INFINITY
@@ -155,7 +156,7 @@ class Searcher:
         ply: int = 0,
     ) -> float:
         if self.stopped:
-            return SearchResult()
+            return probe_ttable(node.key) or SearchResult()
 
         static_eval = self.evaluate(node)
         if not depth:
@@ -215,8 +216,6 @@ class Searcher:
                 )
             return SearchResult(depth, self.evaluate(node), None, alpha, beta)
 
-        # if node.is_checkmate():
-        #     return SearchResult(depth, -INFINITY, None, alpha, beta)
 
         moves = get_ordered_moves(node, ply)
         score = -INFINITY

@@ -29,7 +29,7 @@ from .move_gen import (
     square_above,
     square_below,
 )
-from .utils import bitscan_forward
+from .utils import bitscan_forward, iter_bitscan_forward, popcnt
 from .zobrist import ZOBRIST_KEYS, ZOBRIST_CASTLE, ZOBRIST_EP, ZOBRIST_TURN
 
 def emptyboard():
@@ -318,6 +318,41 @@ class Position:
             # If you do not have the additional information choose what to put
             s.write(f" {self.state.fen_suffix}")
             return s.getvalue()
+
+    def san(self, move: Move) -> str:
+        position_suffix = ""
+        if self.is_check():
+            position_suffix = "+"
+        elif self.is_checkmate():
+            position_suffix = "#"
+
+        if move.is_castle_kingside:
+            return f"O-O{position_suffix}"
+        elif move.is_castle_queenside:
+            return f"O-O-O{position_suffix}"
+        else:
+            piece = self.boards.piece_at(move._from)
+            if piece._type != PieceType.PAWN:
+                piece_str = INV_PIECE_TYPE_MAP.get(piece._type).upper()
+            elif piece._type == PieceType.PAWN:
+                piece_str = Squares(move._from).name.lower()[0] if move.is_capture else ""
+            piece_bb = self.boards.board_for(piece)
+            ranks, files = set(), set()
+            n = popcnt(piece_bb)
+            for psq in iter_bitscan_forward(piece_bb):
+                f, r = Squares(psq).name.lower()
+                files.add(f)
+                ranks.add(r)
+
+            disambiguation_str = ""
+            if n < 2:
+                return f"{piece_str}{move.san_suffix}{position_suffix}"
+            elif n >= 2 and len(ranks) == 1:
+                disambiguation_str = Squares(move._from).name.lower()[0]
+            elif n >= 2 and len(files) == 1:
+                disambiguation_str = Squares(move._from).name.lower()[1]
+
+            return f"{piece_str}{disambiguation_str}{move.san_suffix}{position_suffix}"
 
     def __str__(self):
         div = "┼" + "───┼" * 8

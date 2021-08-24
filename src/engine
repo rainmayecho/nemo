@@ -19,6 +19,7 @@ from nemo.core.position import Position
 from nemo.core.search import Searcher, probe_ttable
 from nemo.core.transposition import TTable, Killers
 from nemo.core.constants import STARTING_FEN, MAX_PLY
+from nemo.core.utils import pairwise
 
 logging.basicConfig(filename='nemo.log', level=logging.DEBUG)
 
@@ -209,12 +210,24 @@ class Engine(AbstractUCIInterface):
         pass
 
     async def info(self):
-        output(TTable.extract_principal_variation(Position(fen=self.__fen)))
+        pv = f"Principal Variation: {' '.join(s for s in self.iter_formatted_principal_variation())}"
+        output(pv)
         pprint(self.__searcher.stats)
 
     async def quit(self):
         sys.exit(0)
 
+    def iter_formatted_principal_variation(self, uci=True):
+        it = iter(TTable.extract_principal_variation(Position(fen=self.__fen)))
+        getter = (lambda e: e[2]) if not uci else (lambda e: str(e[0]))
+        for i, nodes in enumerate(pairwise(it)):
+            first, second = nodes
+            san_str = getter(first)
+            if second is None:
+                yield f"{i + 1}. {san_str} "
+            else:
+                second_san_str = getter(second)
+                yield f"{i + 1}. {san_str} {second_san_str}"
     @property
     def searchtask(self):
         return self.__search_task

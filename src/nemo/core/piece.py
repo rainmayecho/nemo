@@ -75,7 +75,10 @@ class Piece(AbstractPiece):
     def legal_moves(self, bitboards: StackedBitboard, state: State) -> List[Move]:
         if bitboards.king_in_double_check(self.color):
             return (
-                [*self.quiet_moves(bitboards, state=state)] if self._type == PieceType.KING else []
+                [
+                    *self.captures(bitboards, state=state),
+                    *self.quiet_moves(bitboards, state=state)
+                ] if self._type == PieceType.KING else []
             )
         checks_bb = bitboards.checkers(self.color)
         return [

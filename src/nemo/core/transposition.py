@@ -24,12 +24,12 @@ class _TranspositionTable(dict):
             if seen[node.key] >= 3:
                 break
             if result.move:
+                results.append((result.move, result.score, node.san(result.move)))
                 node.make_move(result.move)
-                results.append((result.move, result.score))
             else:
                 break
 
-        for move, _ in results[::-1]:
+        for move, _, _ in results[::-1]:
             node.unmake_move(move)
 
         assert node.key == before

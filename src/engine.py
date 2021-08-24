@@ -14,6 +14,7 @@ from typing import Any, Callable, List, Optional, TypeVar, Generic
 from nemo.core.game import Game
 from nemo.core.move import Move
 from nemo.core.position import Position
+from nemo.core.pgn import PGNWriter
 from nemo.core.search import Searcher, probe_ttable
 from nemo.core.transposition import TTable, Killers
 from nemo.core.constants import STARTING_FEN, MAX_PLY
