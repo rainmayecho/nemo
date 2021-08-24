@@ -26,3 +26,6 @@ def __build():
 
 def build_library() -> Tuple[bool, "CLib"]:
     return __build()
+
+if __name__ == "__main__":
+    build_library()
