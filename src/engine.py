@@ -1,3 +1,5 @@
+#! /Users/vishnu.raveendran/repos/nemo/env/bin/python
+
 import asyncio
 import logging
 import re
@@ -14,10 +16,10 @@ from typing import Any, Callable, List, Optional, TypeVar, Generic
 from nemo.core.game import Game
 from nemo.core.move import Move
 from nemo.core.position import Position
-from nemo.core.pgn import PGNWriter
 from nemo.core.search import Searcher, probe_ttable
 from nemo.core.transposition import TTable, Killers
 from nemo.core.constants import STARTING_FEN, MAX_PLY
+from nemo.core.utils import pairwise
 
 logging.basicConfig(filename='nemo.log', level=logging.DEBUG)
 
@@ -57,6 +59,7 @@ class Timer:
 class UCIParser:
     @classmethod
     def parse(line: str):
+        pass
 
 
 class AbstractUCIInterface(ABC):
@@ -148,6 +151,7 @@ class Engine(AbstractUCIInterface):
         pass
 
     async def ucinewgame(self):
+        await self.stop()
         self.__position = Position()
 
     async def position(
@@ -206,12 +210,24 @@ class Engine(AbstractUCIInterface):
         pass
 
     async def info(self):
-        output(TTable.extract_principal_variation(Position(fen=self.__fen)))
+        pv = f"Principal Variation: {' '.join(s for s in self.iter_formatted_principal_variation())}"
+        output(pv)
         pprint(self.__searcher.stats)
 
     async def quit(self):
         sys.exit(0)
 
+    def iter_formatted_principal_variation(self, uci=True):
+        it = iter(TTable.extract_principal_variation(Position(fen=self.__fen)))
+        getter = (lambda e: e[2]) if not uci else (lambda e: str(e[0]))
+        for i, nodes in enumerate(pairwise(it)):
+            first, second = nodes
+            san_str = getter(first)
+            if second is None:
+                yield f"{i + 1}. {san_str} "
+            else:
+                second_san_str = getter(second)
+                yield f"{i + 1}. {san_str} {second_san_str}"
     @property
     def searchtask(self):
         return self.__search_task
@@ -236,7 +252,7 @@ async def main():
 
     task = None
     while True:
-        inp = (await ainput("input: ", executor=executor)).split(" ")
+        inp = (await ainput("", executor=executor)).split(" ")
         cmd, args = None, tuple()
         if len(inp) >= 2:
             cmd, args = inp[0], (" ".join(inp[1:]),)
