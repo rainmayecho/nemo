@@ -1,5 +1,3 @@
-#! /Users/vishnu.raveendran/repos/nemo/env/bin/python
-
 import asyncio
 import logging
 import re
